@@ -1,0 +1,49 @@
+
+:root{
+  --blue:#0b6efd;
+  --dark:#0b2135;
+  --muted:#6b7280;
+  --accent:#0b6efd;
+}
+
+*{box-sizing:border-box}
+body{font-family: 'Roboto', sans-serif; margin:0; color:var(--dark); line-height:1.6}
+.container{max-width:1100px;margin:0 auto;padding:20px}
+
+.site-header{background:#fff;border-bottom:1px solid #e6e9ee;position:sticky;top:0;z-index:100}
+.site-header .container{display:flex;align-items:center;justify-content:space-between;padding:12px 20px}
+.brand h1{margin:0;font-size:20px;color:var(--dark)}
+.brand .tag{margin:0;font-size:13px;color:var(--muted)}
+
+.nav a{margin-left:15px;text-decoration:none;color:var(--dark);font-weight:600}
+
+.hero{background:#f7fbff;padding:40px 0}
+.hero-inner{display:flex;gap:20px;align-items:center;justify-content:space-between}
+.hero-text h2{font-size:28px;margin:0 0 10px}
+.hero-text p{color:var(--muted);margin:0 0 18px}
+.btn{background:var(--accent);color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:700}
+.btn.small{padding:8px 12px;font-size:14px}
+
+.hero-image img{max-width:420px;width:100%;border-radius:8px;box-shadow:0 6px 20px rgba(11,33,53,.08)}
+
+.section{padding:40px 0}
+.section h3{font-size:22px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+
+.card{background:#fff;border:1px solid #eef2f7;padding:14px;border-radius:8px;text-align:center}
+.card img{max-width:100%;height:140px;object-fit:cover;border-radius:6px}
+.card h4{margin:12px 0 6px}
+
+.testimonials blockquote{background:#fff;padding:16px;border-left:4px solid var(--accent);border-radius:6px;margin-bottom:12px;color:var(--muted)}
+.testimonials cite{display:block;margin-top:8px;color:var(--dark);font-weight:700}
+
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.contact-details p{margin:6px 0}
+.contact-form form{display:flex;flex-direction:column;gap:10px}
+.contact-form input,.contact-form textarea{padding:10px;border:1px solid #dbe5ef;border-radius:6px}
+.site-footer{background:#0b2135;color:#fff;padding:18px 0;margin-top:30px;text-align:center}
+@media(max-width:800px){
+  .hero-inner{flex-direction:column;text-align:center}
+  .contact-grid{grid-template-columns:1fr}
+  .nav{display:none}
+}

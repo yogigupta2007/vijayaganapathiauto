@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vijaya Ganapathi Auto & Agency Services</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <div class="brand">
+        <h1>Vijaya Ganapathi Auto</h1>
+        <p class="tag">Quality tyres & automotive services — Sathupally, Telangana</p>
+      </div>
+      <nav class="nav">
+        <a href="#about">About</a>
+        <a href="#products">Products</a>
+        <a href="#testimonials">Testimonials</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container hero-inner">
+      <div class="hero-text">
+        <h2>Trusted tyre dealers for 15+ years</h2>
+        <p>Reliable tyres, professional service, and trusted expertise for cars, trucks, tractors and two-wheelers.</p>
+        <a class="btn" href="#contact">Get in touch</a>
+      </div>
+      <div class="hero-image">
+        <img src="images/tyre.jpg" alt="Tyres">
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section id="about" class="container section">
+      <h3>About Us</h3>
+      <p>Vijaya Ganapathi Auto & Agency services is one of the biggest tyre dealers in Sathupally, Telangana. We have been there in the industry past 15 years catering to the needs of our customers serving them up to their expectation.</p>
+    </section>
+
+    <section id="products" class="container section">
+      <h3>Products</h3>
+      <div class="grid">
+        <div class="card">
+          <img src="images/tyre.jpg" alt="Car, SUV, Van tyres">
+          <h4>Car, SUV &amp; Van Tyres</h4>
+          <p>Durable, performance-driven tyres designed for comfort and long-lasting reliability.</p>
+        </div>
+        <div class="card">
+          <img src="images/tyre.jpg" alt="Truck Lorry tyres">
+          <h4>Truck &amp; Lorry Tyres</h4>
+          <p>Heavy-duty tyres built to handle tough roads and heavy loads.</p>
+        </div>
+        <div class="card">
+          <img src="images/tyre.jpg" alt="Tractor tyres">
+          <h4>Tractor Tyres</h4>
+          <p>Robust tyres for agricultural machinery with superior traction.</p>
+        </div>
+        <div class="card">
+          <img src="images/tyre.jpg" alt="Two wheeler tyres">
+          <h4>Two-Wheeler Tyres</h4>
+          <p>High-quality tyres for bikes and scooters that provide safety and smooth rides.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="testimonials" class="container section">
+      <h3>What Our Clients Say</h3>
+      <div class="testimonials">
+        <blockquote>
+          "I’ve been buying tyres from Vijaya Ganapathi Auto for years. Their quality and service are unmatched in Sathupally." <cite>— Ramesh K.</cite>
+        </blockquote>
+        <blockquote>
+          "Very professional team. They helped me choose the right tyres for my SUV, and the after-sales support was excellent." <cite>— Anitha P.</cite>
+        </blockquote>
+        <blockquote>
+          "For our trucks and tractors, we only trust Vijaya Ganapathi Auto. The tyres are reliable, and the service is quick." <cite>— Mahesh Transport</cite>
+        </blockquote>
+      </div>
+    </section>
+
+    <section id="contact" class="container section">
+      <h3>Contact Us</h3>
+      <div class="contact-grid">
+        <div class="contact-details">
+          <p><strong>Vijaya Ganapathi Auto &amp; Agency Services</strong></p>
+          <p>Address: [Your Address Here], Sathupally, Telangana</p>
+          <p>Phone: +91 98765 43210</p>
+          <p>Email: info@vijayaganapathiauto.com</p>
+          <p><a href="https://wa.me/919876543210" target="_blank" class="btn small">WhatsApp Us</a></p>
+        </div>
+        <div class="contact-form">
+          <!-- Replace FORM_ID in README & below with your Formspree form ID -->
+          <form id="contactForm" action="https://formspree.io/f/FORM_ID" method="POST">
+            <label for="name">Name</label>
+            <input id="name" name="name" required>
+            <label for="email">Email</label>
+            <input id="email" type="email" name="email" required>
+            <label for="message">Message</label>
+            <textarea id="message" name="message" rows="4" required></textarea>
+            <button type="submit" class="btn">Send Message</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>© Vijaya Ganapathi Auto - 2025</p>
+    </div>
+  </footer>
+
+  <script>
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      document.querySelector(this.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+  </script>
+</body>
+</html>
