@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Scratchcard</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://webkul.github.io/wScratchPad/wScratchPad.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      padding: 50px;
+    }
+    #scratch-container {
+      width: 300px;
+      height: 150px;
+      margin: 0 auto;
+      position: relative;
+      cursor: pointer;
+    }
+    #prize {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    h2 {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Scratch Your Prize</h2>
+<div id="scratch-container">
+  <img id="prize" src="" alt="Prize">
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // -------------------------
+  // 1️⃣ Supabase config
+  // -------------------------
+  const SUPABASE_URL = 'https://your-project.supabase.co'; // replace
+  const SUPABASE_ANON_KEY = 'your-anon-key'; // replace
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // -------------------------
+  // 2️⃣ Get ID from URL
+  // -------------------------
+  const urlParams = new URLSearchParams(window.location.search);
+  const userId = urlParams.get('id');
+
+  if (!userId) {
+    alert('Invalid scratchcard link!');
+  }
+
+  // -------------------------
+  // 3️⃣ Fetch prize from Supabase
+  // -------------------------
+  async function getPrize() {
+    const { data, error } = await supabase
+      .from('scratchcards')   // replace with your table name
+      .select('prize_amount')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      alert('Invalid or expired scratchcard!');
+      return null;
+    }
+    return data.prize_amount;
+  }
+
+  // -------------------------
+  // 4️⃣ Initialize scratch effect
+  // -------------------------
+  getPrize().then(prize => {
+    if (!prize) return;
+
+    // Create a placeholder image with prize amount
+    const prizeImage = `https://via.placeholder.com/300x150.png?text=₹${prize}`;
+    document.getElementById('prize').src = prizeImage;
+
+    $('#scratch-container').wScratchPad({
+      size: 30,           // brush size
+      bg: 'silver',       // scratch layer color
+      fg: prizeImage,     // prize image below
+      scratchMove: function() {},
+      scratchUp: function() {
+        alert(`🎉 Congratulations! You won ₹${prize}`);
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
