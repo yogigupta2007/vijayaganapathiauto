@@ -94,35 +94,37 @@
     };
 
     async function sbFetch(path, { method='GET', body, headers } = {}) {
-      const url = SUPABASE_URL + path; // uses project URL [memory:1]
-      const h = {
-        apikey: SUPABASE_ANON_KEY, // anon key header [memory:1]
-        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
-        'Content-Type': 'application/json',
-        ...headers
-      };
-      const res = await fetch(url, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
-      if (!res.ok) {
-        const txt = await res.text().catch(()=> '');
-        throw new Error('Supabase error ' + res.status + ': ' + txt);
-      }
-      return res.json();
-    }
+  const url = SUPABASE_URL + path;
+  const h = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: 'Bearer ' + SUPABASE_ANON_KEY, // anon key; RLS will apply [web:11]
+    'Content-Type': 'application/json',
+    ...headers
+  };
+  const res = await fetch(url, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) {
+    const txt = await res.text().catch(()=> '');
+    throw new Error(`Supabase ${res.status}: ${txt || 'request failed'}`); // surfaces 401/403/404 [web:8]
+  }
+  return res.json();
+}
+
 
     // Read one row where assigned_to == linkId
-    async function getRowByAssignedTo(assignedTo) {
-      if (!assignedTo) throw new Error('Missing id in URL');
-      const q = `/rest/v1/${TABLE}?select=*&${COL.assignedTo}=eq.${encodeURIComponent(assignedTo)}&limit=1`;
-      const arr = await sbFetch(q, { headers: { Prefer: 'count=exact' } });
-      return arr[0] || null;
-    }
+   async function getRowByAssignedTo(assignedTo) {
+  if (!assignedTo) throw new Error('Missing id in URL'); [web:8]
+  const q = `/rest/v1/${TABLE}?select=*&${COL.assignedTo}=eq.${encodeURIComponent(assignedTo)}&limit=1`;
+  const arr = await sbFetch(q, { headers: { Prefer: 'count=exact', 'x-client-assigned-to': assignedTo } }); // matches RLS [web:8]
+  return arr[0] || null;
+}
 
     // Patch status = 'Used' for that row
-    async function markUsed(row) {
-      const filter = `${COL.assignedTo}=eq.${encodeURIComponent(row[COL.assignedTo])}`;
-      const body = { [COL.status]: 'Used' }; // update payload [memory:1]
-      return sbFetch(`/rest/v1/${TABLE}?${filter}`, { method: 'PATCH', body });
-    }
+   async function markUsed(row) {
+  const assignedTo = row[COL.assignedTo];
+  const filter = `${COL.assignedTo}=eq.${encodeURIComponent(assignedTo)}`;
+  const body = { [COL.status]: 'Used' };
+  return sbFetch(`/rest/v1/${TABLE}?${filter}`, { method: 'PATCH', body, headers: { 'x-client-assigned-to': assignedTo } }); // matches RLS [web:8]
+}
 
     // Minimal scratcher
     class Scratcher {
@@ -169,62 +171,95 @@
       subEl.textContent='Valid for one-time redemption';
       redeemBtn.disabled=false;
     }
+// ---- Canvas sizing helpers (Point 3) ----
+function sizeCanvasToPrize() {
+  const prizeBox = document.getElementById('prize');
+  const rect = prizeBox.getBoundingClientRect();
+  const pad = 18;
+  const width = (rect.width && rect.width > 0) ? rect.width - (pad * 2) : 320; // fallback width
+  const height = Math.max(Math.round(width / (16/9)), 160); // min height so overlay is visible
+  canvas.style.inset = `${pad}px ${pad}px ${pad}px ${pad}px`;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+}
 
-    async function init(){
-      // Position the canvas over prize box
-      const prizeBox = document.getElementById('prize');
-      const updateCanvasRect = () => {
-        const rect = prizeBox.getBoundingClientRect();
-        const pad = 18;
-        const width = rect.width - (pad * 2);
-        const height = Math.max(Math.round(width / (16/9)), 160);
-        canvas.style.inset = `${pad}px ${pad}px ${pad}px ${pad}px`;
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
-      };
-      updateCanvasRect(); window.addEventListener('resize', updateCanvasRect);
+// Wait for layout before first sizing
+document.addEventListener('DOMContentLoaded', () => {
+  requestAnimationFrame(() => { sizeCanvasToPrize(); });
+  window.addEventListener('resize', sizeCanvasToPrize);
+});
 
-      try{
-        row = await getRowByAssignedTo(linkId); // fetch by assigned_to == URL id [memory:1]
-        if(!row){ stateEl.innerHTML='<span class="err">Invalid or expired link.</span>'; canvas.style.display='none'; return; }
+    // ---- Improved init with clearer errors and early overlay (Point 4) ----
+async function init(){
+  try{
+    // Ensure overlay is visible even before data fetch
+    canvas.style.display = 'block';
 
-        amountEl.textContent = fmtINR(row[COL.prizeAmount]); // display INR amount [memory:1]
+    const idParam = linkId;
+    const rowOrNull = await getRowByAssignedTo(idParam); // uses assigned_to filter
+    row = rowOrNull;
 
-        if ((row[COL.status]||'').toLowerCase()==='used'){
-          setClaimedUI(); canvas.style.display='none'; labelEl.textContent='Reward revealed'; stateEl.textContent='This reward has already been used.'; locked=true; return;
-        } else { setUnclaimedUI(); stateEl.textContent='Scratch the card to reveal your reward.'; }
-
-        const scratcher = new Scratcher(canvas, {
-          brush:26, threshold:0.5,
-          onReveal: () => {
-            if (revealed || locked) return;
-            revealed=true; labelEl.textContent='Reward revealed'; stateEl.textContent='Revealed successfully. Tap Redeem to mark as Used.'; redeemBtn.disabled=false;
-          }
-        });
-
-        redeemBtn.addEventListener('click', async ()=>{
-          if(!row || locked) return;
-          redeemBtn.disabled=true; stateEl.textContent='Finalizing…';
-          try{
-            await markUsed(row); // updates status='Used' [memory:1]
-            setClaimedUI(); stateEl.textContent='Marked as Used. Show this at the counter.';
-          }catch(e){
-            redeemBtn.disabled=false; stateEl.innerHTML='<span class="err">Could not update status. Try again.</span>';
-          }
-        });
-
-        shareBtn.addEventListener('click', async ()=>{
-          const shareUrl = location.href;
-          if (navigator.share){ try{ await navigator.share({ title:'Scratch & Win', text:'Reveal your reward', url:shareUrl }); }catch{} }
-          else { await navigator.clipboard.writeText(shareUrl).catch(()=>{}); stateEl.textContent='Link copied to clipboard.'; }
-        });
-
-      }catch(e){
-        stateEl.innerHTML='<span class="err">Error loading reward. Please try again later.</span>';
-        console.error(e);
-      }
+    if(!row){
+      stateEl.innerHTML = '<span class="err">Invalid or expired link (no match for assigned_to).</span>';
+      return;
     }
-    init();
+
+    amountEl.textContent = fmtINR(row[COL.prizeAmount]);
+
+    if ((row[COL.status]||'').toLowerCase()==='used'){
+      setClaimedUI();
+      canvas.style.pointerEvents='none';
+      labelEl.textContent='Reward revealed';
+      stateEl.textContent='This reward has already been used.';
+      locked=true;
+      return;
+    } else {
+      setUnclaimedUI();
+      stateEl.textContent='Scratch the card to reveal your reward.';
+    }
+
+    const scratcher = new Scratcher(canvas, {
+      brush:26, threshold:0.5,
+      onReveal: () => {
+        if (revealed || locked) return;
+        revealed=true;
+        labelEl.textContent='Reward revealed';
+        stateEl.textContent='Revealed successfully. Tap Redeem to mark as Used.';
+        redeemBtn.disabled=false;
+      }
+    });
+
+    redeemBtn.addEventListener('click', async ()=>{
+      if(!row || locked) return;
+      redeemBtn.disabled=true; stateEl.textContent='Finalizing…';
+      try {
+        await markUsed(row);
+        setClaimedUI();
+        stateEl.textContent='Marked as Used. Show this at the counter.';
+      } catch (e) {
+        console.error('PATCH status error:', e);
+        redeemBtn.disabled=false;
+        stateEl.innerHTML='<span class="err">Could not update status. Check RLS policy and Console for error.</span>';
+      }
+    });
+
+    shareBtn.addEventListener('click', async ()=>{
+      const shareUrl = location.href;
+      if (navigator.share){
+        try{ await navigator.share({ title:'Scratch & Win', text:'Reveal your reward', url:shareUrl }); }catch{}
+      } else {
+        await navigator.clipboard.writeText(shareUrl).catch(()=>{});
+        stateEl.textContent='Link copied to clipboard.';
+      }
+    });
+
+  } catch (e) {
+    console.error('Init error:', e);
+    stateEl.innerHTML = '<span class="err">Error loading reward. Please try again later.</span>';
+  }
+}
+init();
+
   </script>
 </body>
 </html>
