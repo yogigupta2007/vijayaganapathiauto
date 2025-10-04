@@ -32,9 +32,10 @@
 <body>
 
 <h2>Scratch Your Prize</h2>
-<div id="scratch-container">
-  <img id="prize" src="" alt="Prize">
+<div id="scratch-container" style="width:300px; height:150px;">
+  <img id="prize" src="images/prize-placeholder.jpg" alt="Prize"> <!-- bg -->
 </div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -82,15 +83,15 @@
     const prizeImage = `https://via.placeholder.com/300x150.png?text=₹${prize}`;
     document.getElementById('prize').src = prizeImage;
 
-    $('#scratch-container').wScratchPad({
-      size: 30,           // brush size
-      bg: 'silver',       // scratch layer color
-      fg: prizeImage,     // prize image below
-      scratchMove: function() {},
-      scratchUp: function() {
-        alert(`🎉 Congratulations! You won ₹${prize}`);
-      }
-    });
+$('#scratch-container').wScratchPad({
+  size: 30,                  // brush size
+  bg: document.getElementById('prize').src,  // prize image under scratch
+  fg: 'images/silver-overlay.png',           // silver scratch overlay
+  scratchUp: function() {
+    alert(`🎉 Congratulations! You won ₹${prize}`);
+  }
+});
+
   });
 </script>
 
