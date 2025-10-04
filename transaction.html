@@ -1,99 +1,230 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Scratchcard</title>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://webkul.github.io/wScratchPad/wScratchPad.min.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Transaction | Scratch & Win</title>
+  <meta name="color-scheme" content="light dark" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background-color: #f0f0f0;
-      padding: 50px;
+    :root {
+      --bg: #0f172a; --text: #e5e7eb; --muted:#94a3b8; --gold:#f59e0b;
     }
-    #scratch-container {
-      width: 300px;
-      height: 150px;
-      margin: 0 auto;
-      position: relative;
-      cursor: pointer;
-    }
-    #prize {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    h2 {
-      margin-bottom: 20px;
-    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin:0; min-height:100svh; display:grid; place-items:center; background:#0b1020; color:var(--text); padding:16px; }
+    .wrap { width:100%; max-width:420px; }
+    .card { background:linear-gradient(180deg,#0b1224,#0a1020); border:1px solid rgba(148,163,184,.15); border-radius:16px; box-shadow:0 10px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.03); overflow:hidden; }
+    .hdr { padding:18px; border-bottom:1px solid rgba(148,163,184,.12); display:flex; justify-content:space-between; align-items:center; }
+    .hdr h1 { margin:0; font-size:18px; }
+    .badge { font-size:12px; padding:4px 10px; border-radius:999px; background:linear-gradient(135deg,#34d399,#22d3ee); color:#0b1020; font-weight:700; }
+    .scratch-area { position:relative; padding:18px; }
+    .prize { position:relative; border-radius:14px; background:radial-gradient(800px 500px at 10% 10%, rgba(20,184,166,.1), rgba(2,6,23,.6)), linear-gradient(180deg, rgba(2,6,23,.9), rgba(2,6,23,.8)); border:1px solid rgba(148,163,184,.18); padding:28px 20px; text-align:center; overflow:hidden; }
+    .label { font-size:14px; color:var(--muted); margin-bottom:8px; letter-spacing:.3px; }
+    .amount { font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
+    .sub { margin-top:8px; font-size:12px; color:var(--muted); }
+    canvas.scratcher { position:absolute; inset:18px; width:calc(100% - 36px); height:auto; aspect-ratio:16/9; border-radius:14px; display:block; touch-action:none; }
+    .actions { display:flex; gap:10px; padding:0 18px 18px 18px; }
+    button { flex:1; background:linear-gradient(135deg,#22d3ee,#0ea5e9 60%,#6366f1); color:#0b1020; border:0; border-radius:12px; padding:12px 14px; font-weight:700; letter-spacing:.3px; cursor:pointer; box-shadow:0 10px 28px rgba(14,165,233,.35); }
+    button.secondary { background:transparent; color:var(--text); border:1px solid rgba(148,163,184,.2); box-shadow:none; }
+    .state { padding:14px 18px 18px 18px; color:var(--muted); font-size:13px; }
+    .err { color:#fda4af; }
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="card" id="card">
+      <div class="hdr">
+        <h1>Vijayaganapthi Auto</h1>
+        <div class="badge" id="status-badge">Unclaimed</div>
+      </div>
 
-<h2>Scratch Your Prize</h2>
-<div id="scratch-container" style="width:300px; height:150px;">
-  <img id="prize" src="images/prize-placeholder.jpg" alt="Prize"> <!-- bg -->
-</div>
+      <div class="scratch-area">
+        <div class="prize" id="prize">
+          <div class="label" id="label">Scratch to reveal</div>
+          <div class="amount" id="amount">₹ — — —</div>
+          <div class="sub" id="subtext">Valid for one-time redemption</div>
+        </div>
+        <canvas class="scratcher" id="scratcher"></canvas>
+      </div>
 
+      <div class="actions">
+        <button id="redeemBtn" disabled>Redeem now</button>
+        <button id="shareBtn" class="secondary">Share</button>
+      </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-  // -------------------------
-  // 1️⃣ Supabase config
-  // -------------------------
-  const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co'; // replace
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q'; // replace
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      <div class="state" id="stateMsg">Loading reward…</div>
+    </div>
+  </div>
 
-  // -------------------------
-  // 2️⃣ Get ID from URL
-  // -------------------------
-  const urlParams = new URLSearchParams(window.location.search);
-  const userId = urlParams.get('id');
+  <script type="module">
+    // ================== CONFIG: EDIT THESE ==================
+    const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co'; // put project URL here [memory:1]
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q'; // put anon key here [memory:1]
 
-  if (!userId) {
-    alert('Invalid scratchcard link!');
-  }
+    // Supabase table and column mapping as per provided screenshot
+    const TABLE = 'scratchcards'; // table name [memory:1]
+    const COL = {
+      id: 'id',                 // bigint PK (not used in URL) [memory:1]
+      assignedTo: 'assigned_to',// text; equals ?id from URL [memory:1]
+      prizeAmount: 'prize_amount', // numeric amount [memory:1]
+      status: 'status',         // text; set to 'Used' after redeem [memory:1]
+      assignedAt: 'assigned_at',// timestamp (optional display) [memory:1]
+      isWinner: 'is_winner',    // boolean (optional) [memory:1]
+      cardNumber: 'card_number',// bigint (optional) [memory:1]
+      batchId: 'batch_id'       // bigint (optional) [memory:1]
+    };
+    // URL pattern: https://vijayaganapthiauto.com/transaction?id=dlkjfldjld
+    const qs = new URLSearchParams(location.search);
+    const linkId = qs.get('id'); // the assigned_to value [memory:1]
+    // ========================================================
 
-  // -------------------------
-  // 3️⃣ Fetch prize from Supabase
-  // -------------------------
-  async function getPrize() {
-    const { data, error } = await supabase
-      .from('Scratchcards')   // replace with your table name
-      .select('prize_amount')
-      .eq('assigned_to', userId)
-      .single();
+    const $ = (id) => document.getElementById(id);
+    const amountEl = $('amount');
+    const labelEl = $('label');
+    const subEl = $('subtext');
+    const stateEl = $('stateMsg');
+    const badgeEl = $('status-badge');
+    const redeemBtn = $('redeemBtn');
+    const shareBtn = $('shareBtn');
+    const canvas = $('scratcher');
 
-    if (error || !data) {
-      alert('Invalid or expired scratchcard!');
-      return null;
+    const fmtINR = (amt) => {
+      const n = Number(amt ?? 0);
+      try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n); }
+      catch { return '₹ ' + n.toLocaleString('en-IN'); }
+    };
+
+    async function sbFetch(path, { method='GET', body, headers } = {}) {
+      const url = SUPABASE_URL + path; // uses project URL [memory:1]
+      const h = {
+        apikey: SUPABASE_ANON_KEY, // anon key header [memory:1]
+        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        ...headers
+      };
+      const res = await fetch(url, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=> '');
+        throw new Error('Supabase error ' + res.status + ': ' + txt);
+      }
+      return res.json();
     }
-    return data.prize_amount;
-  }
 
-  // -------------------------
-  // 4️⃣ Initialize scratch effect
-  // -------------------------
-  getPrize().then(prize => {
-    if (!prize) return;
+    // Read one row where assigned_to == linkId
+    async function getRowByAssignedTo(assignedTo) {
+      if (!assignedTo) throw new Error('Missing id in URL');
+      const q = `/rest/v1/${TABLE}?select=*&${COL.assignedTo}=eq.${encodeURIComponent(assignedTo)}&limit=1`;
+      const arr = await sbFetch(q, { headers: { Prefer: 'count=exact' } });
+      return arr[0] || null;
+    }
 
-    // Create a placeholder image with prize amount
-    const prizeImage = `https://via.placeholder.com/300x150.png?text=₹${prize}`;
-    document.getElementById('prize').src = prizeImage;
+    // Patch status = 'Used' for that row
+    async function markUsed(row) {
+      const filter = `${COL.assignedTo}=eq.${encodeURIComponent(row[COL.assignedTo])}`;
+      const body = { [COL.status]: 'Used' }; // update payload [memory:1]
+      return sbFetch(`/rest/v1/${TABLE}?${filter}`, { method: 'PATCH', body });
+    }
 
-$('#scratch-container').wScratchPad({
-  size: 30,                  // brush size
-  bg: document.getElementById('prize').src,  // prize image under scratch
-  fg: 'images/silver-overlay.png',           // silver scratch overlay
-  scratchUp: function() {
-    alert(`🎉 Congratulations! You won ₹${prize}`);
-  }
-});
+    // Minimal scratcher
+    class Scratcher {
+      constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d', { willReadFrequently:true });
+        this.brush = brush; this.threshold = threshold; this.onReveal = onReveal; this.down=false;
+        this._start=this._start.bind(this); this._move=this._move.bind(this); this._end=this._end.bind(this);
+        this._resize(); this._paintCover();
+        canvas.addEventListener('pointerdown', this._start);
+        canvas.addEventListener('pointermove', this._move);
+        canvas.addEventListener('pointerup', this._end);
+        canvas.addEventListener('pointerleave', this._end);
+        window.addEventListener('resize', ()=>this._resize());
+      }
+      _resize(){ const r=this.canvas.getBoundingClientRect(); const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1)); this.canvas.width=r.width*dpr; this.canvas.height=r.height*dpr; this.ctx.setTransform(dpr,0,0,dpr,0,0); this._paintCover(); }
+      _paintCover(){
+        const r=this.canvas.getBoundingClientRect(), ctx=this.ctx;
+        ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+        const g=ctx.createLinearGradient(0,0,r.width,r.height); g.addColorStop(0,'#c7cdd8'); g.addColorStop(0.5,'#b1b8c3'); g.addColorStop(1,'#dde1e8');
+        ctx.fillStyle=g; ctx.fillRect(0,0,r.width,r.height);
+        ctx.fillStyle='rgba(15,23,42,.8)'; ctx.font='700 20px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('Scratch here', r.width/2, r.height/2);
+        ctx.font='500 12px system-ui'; ctx.fillStyle='rgba(15,23,42,.55)'; ctx.fillText('Use finger to scratch', r.width/2, r.height/2+22);
+        ctx.globalCompositeOperation='destination-out';
+      }
+      _scratch(e){ const rect=this.canvas.getBoundingClientRect(); const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left; const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top; const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill(); }
+      _check(){ const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data; let clr=0,tot=0; for(let y=0;y<h;y+=step){ for(let x=0;x<w;x+=step){ const a=d[((y*w+x)<<2)+3]; tot++; if(a===0) clr++; } } if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); } }
+      _start(e){ this.down=true; this._scratch(e); }
+      _move(e){ if(!this.down) return; this._scratch(e); this._check(); }
+      _end(){ this.down=false; this._check(); }
+      revealAll(){ this.ctx.globalCompositeOperation='destination-out'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.canvas.style.pointerEvents='none'; }
+    }
 
-  });
-</script>
+    let row=null, revealed=false, locked=false;
 
+    function setClaimedUI() {
+      badgeEl.textContent='Used';
+      badgeEl.style.background='linear-gradient(135deg,#fca5a5,#f59e0b)';
+      subEl.textContent='Already used';
+      redeemBtn.disabled=true;
+    }
+    function setUnclaimedUI() {
+      badgeEl.textContent='Unclaimed';
+      subEl.textContent='Valid for one-time redemption';
+      redeemBtn.disabled=false;
+    }
+
+    async function init(){
+      // Position the canvas over prize box
+      const prizeBox = document.getElementById('prize');
+      const updateCanvasRect = () => {
+        const rect = prizeBox.getBoundingClientRect();
+        const pad = 18;
+        const width = rect.width - (pad * 2);
+        const height = Math.max(Math.round(width / (16/9)), 160);
+        canvas.style.inset = `${pad}px ${pad}px ${pad}px ${pad}px`;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+      };
+      updateCanvasRect(); window.addEventListener('resize', updateCanvasRect);
+
+      try{
+        row = await getRowByAssignedTo(linkId); // fetch by assigned_to == URL id [memory:1]
+        if(!row){ stateEl.innerHTML='<span class="err">Invalid or expired link.</span>'; canvas.style.display='none'; return; }
+
+        amountEl.textContent = fmtINR(row[COL.prizeAmount]); // display INR amount [memory:1]
+
+        if ((row[COL.status]||'').toLowerCase()==='used'){
+          setClaimedUI(); canvas.style.display='none'; labelEl.textContent='Reward revealed'; stateEl.textContent='This reward has already been used.'; locked=true; return;
+        } else { setUnclaimedUI(); stateEl.textContent='Scratch the card to reveal your reward.'; }
+
+        const scratcher = new Scratcher(canvas, {
+          brush:26, threshold:0.5,
+          onReveal: () => {
+            if (revealed || locked) return;
+            revealed=true; labelEl.textContent='Reward revealed'; stateEl.textContent='Revealed successfully. Tap Redeem to mark as Used.'; redeemBtn.disabled=false;
+          }
+        });
+
+        redeemBtn.addEventListener('click', async ()=>{
+          if(!row || locked) return;
+          redeemBtn.disabled=true; stateEl.textContent='Finalizing…';
+          try{
+            await markUsed(row); // updates status='Used' [memory:1]
+            setClaimedUI(); stateEl.textContent='Marked as Used. Show this at the counter.';
+          }catch(e){
+            redeemBtn.disabled=false; stateEl.innerHTML='<span class="err">Could not update status. Try again.</span>';
+          }
+        });
+
+        shareBtn.addEventListener('click', async ()=>{
+          const shareUrl = location.href;
+          if (navigator.share){ try{ await navigator.share({ title:'Scratch & Win', text:'Reveal your reward', url:shareUrl }); }catch{} }
+          else { await navigator.clipboard.writeText(shareUrl).catch(()=>{}); stateEl.textContent='Link copied to clipboard.'; }
+        });
+
+      }catch(e){
+        stateEl.innerHTML='<span class="err">Error loading reward. Please try again later.</span>';
+        console.error(e);
+      }
+    }
+    init();
+  </script>
 </body>
 </html>
