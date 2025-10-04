@@ -41,8 +41,8 @@
   // -------------------------
   // 1️⃣ Supabase config
   // -------------------------
-  const SUPABASE_URL = 'https://your-project.supabase.co'; // replace
-  const SUPABASE_ANON_KEY = 'your-anon-key'; // replace
+  const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co'; // replace
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q'; // replace
   const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // -------------------------
@@ -60,9 +60,9 @@
   // -------------------------
   async function getPrize() {
     const { data, error } = await supabase
-      .from('scratchcards')   // replace with your table name
+      .from('Scratchcards')   // replace with your table name
       .select('prize_amount')
-      .eq('id', userId)
+      .eq('assigned_to', userId)
       .single();
 
     if (error || !data) {
