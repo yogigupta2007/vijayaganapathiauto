@@ -14,23 +14,44 @@
     .hdr{ padding:16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
     .hdr h1{ margin:0; font-size:18px; }
     .scratch-area{ position:relative; padding:18px; }
-    .prize{ position:relative; border-radius:14px; background:linear-gradient(180deg,rgba(2,6,23,.9),rgba(2,6,23,.85)); border:1px solid rgba(148,163,184,.18); padding:28px 20px; text-align:center; overflow:hidden; }
+    .prize{
+      position:relative; border-radius:14px;
+      background:linear-gradient(180deg,rgba(2,6,23,.9),rgba(2,6,23,.85));
+      border:1px solid rgba(148,163,184,.18);
+      padding:28px 20px; text-align:center; overflow:hidden;
+      min-height: 180px;
+    }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
     .status{ margin-top:10px; font-size:13px; color:var(--muted); }
-    /* FIX 1: full-bleed overlay fills the inner rounded box */
+
     canvas.scratcher{
       position:absolute;
-      top:0; right:0; bottom:0; left:0;  /* cover .prize content box */
+      top:0; right:0; bottom:0; left:0;
       width:100%; height:100%;
-      border-radius:14px;                 /* match .prize */
+      border-radius:14px;
       display:block;
       touch-action:none;
-      z-index:5;                          /* sit above inner glows */
+      z-index:5;
       pointer-events:auto;
+      background: transparent;
     }
+
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
-    .err{ color:#fda4af; }
+
+    /* Transaction details block */
+    .details{
+      margin:12px 18px 18px 18px;
+      border:1px solid rgba(148,163,184,.15);
+      border-radius:12px;
+      padding:12px 14px;
+      background:rgba(2,6,23,.35);
+      font-size:14px;
+      line-height:1.5;
+      color:#d1d5db;
+    }
+    .details div{ display:flex; justify-content:space-between; gap:10px; }
+    .details .k{ color:var(--muted); }
   </style>
 </head>
 <body>
@@ -47,45 +68,60 @@
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
 
+      <div class="details" id="detailsBox" style="display:none;">
+        <div><span class="k">Customer</span><span id="custName">—</span></div>
+        <div><span class="k">Txn amount</span><span id="custAmt">—</span></div>
+        <div><span class="k">Timestamp</span><span id="custTs">—</span></div>
+      </div>
+
       <div class="state" id="stateMsg">Loading…</div>
     </div>
   </div>
 
   <script type="module">
-        // === CONFIG: REPLACE THESE ===
-    const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co'; // replace
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q'; // replace
-    // ========================================================
-    const TABLE = 'Scratchcards';                               // table name [web:8]
-    const COL = { assignedTo:'assigned_to', prizeAmount:'prize_amount', status:'status' }; // column map [web:8]
+    // --------- EDIT THESE TWO LINES ONLY ---------
+    const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';   // project URL [web:50]
+    const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY';                 // anon key [web:50]
+    // ---------------------------------------------
 
-    // DOM refs
+    // Tables and columns
+    const SCRATCH_TABLE = 'scratchcards'; // status source [web:50]
+    const SC = { assignedTo:'assigned_to', prizeAmount:'prize_amount', status:'status' }; // [web:50]
+
+    const CUST_TABLE = 'Customers'; // case-sensitive only if created quoted; adjust if your table is lowercase [web:54][web:65]
+    const CT = { CID:'CID', NAME:'NAME', AMOUNT:'AMOUNT', TIME_STAMP:'TIME_STAMP' }; // match your column case exactly [web:54][web:65]
+
+    // URL param
     const qs = new URLSearchParams(location.search);
-    const linkId = qs.get('id');                                // ?id=VALUE [web:8]
+    const linkId = qs.get('id'); // used for both SCRATCH (assigned_to) and Customers (CID) [web:50]
+
+    // DOM
     const $ = (id) => document.getElementById(id);
-    const amountEl = $('amount'), labelEl=$('label'), statusEl=$('statusText'), stateEl=$('stateMsg'), canvas=$('scratcher'); // refs [web:8]
+    const amountEl = $('amount'), labelEl=$('label'), statusEl=$('statusText'), stateEl=$('stateMsg'), canvas=$('scratcher');
+    const detailsBox = $('detailsBox'), custNameEl=$('custName'), custAmtEl=$('custAmt'), custTsEl=$('custTs');
 
     // INR formatter
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
       catch { return '₹ ' + Number(n||0).toLocaleString('en-IN'); }
-    }; // [web:8]
+    }; // [web:50]
 
-    // Paint the gray overlay to exactly fill .prize inner box
-    function paintGrayOverlay(canvasEl){
-      const prize = document.getElementById('prize');
+    // Paint overlay to fill .prize inner content
+    function paintOverlay(){
+      const prize = $('prize');
       const cs = getComputedStyle(prize);
       const padTop = parseFloat(cs.paddingTop)||0, padRight = parseFloat(cs.paddingRight)||0;
-      const padBottom = parseFloat(cs.paddingBottom)||0, padLeft = parseFloat(cs.paddingLeft)||0; // [web:13]
+      const padBottom = parseFloat(cs.paddingBottom)||0, padLeft = parseFloat(cs.paddingLeft)||0;
 
       const rect = prize.getBoundingClientRect();
       const innerWidth = Math.max(0, rect.width - (padLeft + padRight));
       const innerHeight = Math.max(0, rect.height - (padTop + padBottom)); // [web:13]
 
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvasEl.width = Math.floor(innerWidth * dpr);
-      canvasEl.height = Math.floor(innerHeight * dpr);
-      const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
+      canvas.width = Math.floor(innerWidth * dpr);
+      canvas.height = Math.floor(innerHeight * dpr);
+
+      const ctx = canvas.getContext('2d', { willReadFrequently:true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // [web:13]
 
       ctx.clearRect(0, 0, innerWidth, innerHeight);
@@ -96,39 +132,34 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('Scratch here', innerWidth/2, innerHeight/2);
-      ctx.globalCompositeOperation = 'destination-out'; // erase mode [web:13]
+      ctx.globalCompositeOperation = 'destination-out';
     }
 
-    function layoutOverlay(){
-      paintGrayOverlay(canvas); // CSS already covers full box; we just set pixels [web:13]
-    }
-
-    // Lightweight REST helpers
+    // REST helpers
     async function sbFetch(url, opts){
       const h = { apikey: SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', ...(opts?.headers||{}) };
       const res = await fetch(url, { ...opts, headers: h });
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
       try { return JSON.parse(text); } catch { return text; }
-    } // [web:8]
+    } // [web:50]
 
-    function selectUrl(idVal){
-      return `${SUPABASE_URL}/rest/v1/${TABLE}?select=${COL.prizeAmount},${COL.status},${COL.assignedTo}&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`; // [web:8]
-    }
-    function patchUrl(idVal){
-      return `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`; // [web:8]
-    }
+    // Scratchcards queries
+    const scSelectUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${SCRATCH_TABLE}?select=${SC.prizeAmount},${SC.status},${SC.assignedTo}&${SC.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`; // [web:50]
+    const scPatchUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${SCRATCH_TABLE}?${SC.assignedTo}=eq.${encodeURIComponent(idVal)}`; // [web:50]
 
-    async function loadRow(idVal){ return sbFetch(selectUrl(idVal)); } // [web:8]
-    async function markUsed(idVal){
-      return sbFetch(patchUrl(idVal), {
-        method:'PATCH',
-        headers:{ Prefer:'return=representation' },
-        body: JSON.stringify({ [COL.status]:'Used' })
-      });
-    } // [web:8]
+    const loadScratchRow = (idVal) => sbFetch(scSelectUrl(idVal)); // [web:50]
+    const markUsed = (idVal) =>
+      sbFetch(scPatchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [SC.status]:'Used' }) }); // [web:38][web:50]
 
-    // Scratcher that only handles erasing and threshold
+    // Customers query (NAME, AMOUNT, TIME_STAMP) by CID = id
+    const custSelectUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${CUST_TABLE}?select=${CT.NAME},${CT.AMOUNT},${CT.TIME_STAMP}&${CT.CID}=eq.${encodeURIComponent(idVal)}&limit=1`; // [web:50]
+    const loadCustomer = (idVal) => sbFetch(custSelectUrl(idVal)); // [web:50]
+
+    // Scratcher handler (no sizing inside)
     class Scratcher {
       constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}) {
         this.canvas = canvas;
@@ -140,33 +171,47 @@
         canvas.addEventListener('pointerup', this._end);
         canvas.addEventListener('pointerleave', this._end);
       }
-      _scratch(e){ const rect=this.canvas.getBoundingClientRect(); const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left; const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top; const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill(); }
+      _scratch(e){ const r=this.canvas.getBoundingClientRect(); const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-r.left; const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-r.top; const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill(); }
       _check(){ const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data; let clr=0,tot=0; for(let y=0;y<h;y+=step){ for(let x=0;x<w;x+=step){ const a=d[((y*w+x)<<2)+3]; tot++; if(a===0) clr++; } } if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); } }
       _start(e){ this.down=true; this._scratch(e); }
       _move(e){ if(!this.down) return; this._scratch(e); this._check(); }
       _end(){ this.down=false; this._check(); }
       revealAll(){ this.ctx.globalCompositeOperation='destination-out'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.canvas.style.pointerEvents='none'; }
-    } // [web:13]
+    } // [web:42][web:46]
 
-    let row=null, revealed=false;
+    let scratchRow=null, revealed=false;
 
     async function init(){
-      // Paint overlay as soon as layout stabilizes
-      document.fonts?.ready?.then(()=>{}).finally(()=>{}); // no-op to avoid font blocking [web:13]
-      await new Promise(r => requestAnimationFrame(()=>r)); // post-layout [web:13]
-      layoutOverlay();
-      window.addEventListener('resize', layoutOverlay); // responsive repaint [web:13]
+      // Paint overlay after layout
+      await new Promise(r => requestAnimationFrame(()=>r)); paintOverlay(); window.addEventListener('resize', paintOverlay); // [web:13]
 
-      if (!linkId){
-        stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>'; return; // [web:8]
-      }
+      if (!linkId){ stateEl.innerHTML='<span class="err">Missing ?id in URL.</span>'; return; } // [web:50]
+
       try{
-        const arr = await loadRow(linkId);
-        row = arr[0];
-        if (!row){ stateEl.innerHTML = '<span class="err">No record found for this link.</span>'; return; } // [web:8]
-        amountEl.textContent = fmtINR(row[COL.prizeAmount]); // show amount text under overlay [web:8]
-        statusEl.textContent = String(row[COL.status] ?? ''); // show current status [web:8]
-        stateEl.textContent = 'Scratch the card to reveal your reward.'; // UX text [web:8]
+        // Load scratch row
+        const scArr = await loadScratchRow(linkId);
+        scratchRow = scArr[0];
+        if (!scratchRow){ stateEl.innerHTML='<span class="err">No record found for this link.</span>'; return; } // [web:50]
+
+        amountEl.textContent = fmtINR(scratchRow[SC.prizeAmount]); // show prize [web:50]
+        statusEl.textContent = String(scratchRow[SC.status] ?? ''); // show status [web:50]
+
+        // Load customer details in parallel (ignore if missing)
+        try{
+          const custArr = await loadCustomer(linkId);
+          const cust = custArr[0];
+          if (cust){
+            detailsBox.style.display = 'block';
+            custNameEl.textContent = String(cust[CT.NAME] ?? '');
+            custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? scratchRow[SC.prizeAmount]);
+            const ts = cust[CT.TIME_STAMP];
+            custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
+          }else{
+            detailsBox.style.display = 'none';
+          }
+        }catch(e){ detailsBox.style.display = 'none'; }
+
+        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         new Scratcher(canvas, {
           brush:26, threshold:0.5,
@@ -174,21 +219,29 @@
             if (revealed) return;
             revealed = true;
             labelEl.textContent = 'Reward revealed';
+
+            // Only update if not already Used
+            const prevStatus = String(scratchRow[SC.status] ?? '').toLowerCase();
+            if (prevStatus === 'used'){
+              stateEl.textContent = 'Already used.';
+              return;
+            }
+
             stateEl.textContent = 'Updating status…';
             try{
-              const updatedRows = await markUsed(row[COL.assignedTo]);
+              const updatedRows = await markUsed(scratchRow[SC.assignedTo]); // PATCH status [web:38][web:50]
               const updated = Array.isArray(updatedRows) ? updatedRows[0] : null;
-              statusEl.textContent = String(updated?.[COL.status] ?? 'Used');
+              statusEl.textContent = String(updated?.[SC.status] ?? 'Used');
               stateEl.textContent = 'Revealed.';
             }catch(e){
-              console.error('PATCH error:', e); // check Network → PATCH for exact cause
-              stateEl.innerHTML = '<span class="err">Could not update status. Please show this screen to staff.</span>';
+              console.error('PATCH error:', e); // see DevTools for exact cause [web:50]
+              stateEl.innerHTML = '<span class="err">Revealed. Could not update status.</span>';
             }
           }
         });
       }catch(e){
         console.error('GET error:', e);
-        stateEl.innerHTML = '<span class="err">Error loading reward.</span>'; // [web:8]
+        stateEl.innerHTML = '<span class="err">Error loading data.</span>'; // [web:50]
       }
     }
     init();
