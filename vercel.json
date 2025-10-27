@@ -1,7 +1,10 @@
 {
-"$schema": "https://openapi.vercel.sh/vercel.json",
-"routes": [
-{ "src": "^/transaction/?$", "dest": "/transaction.html" }
-],
-"cleanUrls": true
+  "redirects": [
+    {
+      "source": "/transaction",
+      "destination": "/transaction.html",
+      "permanent": true
+    }
+  ]
 }
+
