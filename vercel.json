@@ -1,7 +1,7 @@
 {
 "$schema": "https://openapi.vercel.sh/vercel.json",
 "routes": [
-{ "src": "/transaction", "dest": "/transaction.html" }
+{ "src": "^/transaction/?$", "dest": "/transaction.html" }
 ],
 "cleanUrls": true
 }
