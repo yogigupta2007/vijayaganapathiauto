@@ -115,7 +115,7 @@
     }
 
     async function sbFetch(url, opts){ 
-      const h = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', ...(opts?.headers||{}) };
+      const h = { apikey: SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', ...(opts?.headers||{}) };
       const res = await fetch(url, { ...opts, headers: h });
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
@@ -191,35 +191,37 @@
       }
 
       try{
-        const arr = await loadRow(linkId);
-        row = arr[0];
+        // Load scratch row and customer in parallel
+        const [scArr, custArr] = await Promise.all([
+          loadRow(linkId),
+          loadCustomer(linkId)
+        ]);
+
+        row = scArr[0];
         if (!row){
           stateEl.innerHTML = '<span class="err">No record found for this link.</span>';
           return;
         }
 
-        // Always show scratchcard values
+        // Scratchcard values
         amountEl.textContent = fmtINR(row[COL.prizeAmount]);
         const currentStatus = String(row[COL.status] ?? '');
         statusEl.textContent = currentStatus;
         stateEl.textContent = 'Scratch the card to reveal your reward.';
 
-        // Load and show transaction details before scratch
-        try {
-          const custArr = await loadCustomer(linkId);
-          const cust = custArr[0];
-          if (cust) {
-            detailsBox.style.display = 'block';
-            custNameEl.textContent = String(cust[CT.NAME] ?? '');
-            custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
-            const ts = cust[CT.TIME_STAMP];
-            custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
-          }
-        } catch (e) {
+        // Transaction details
+        const cust = custArr && custArr[0];
+        if (cust) {
+          detailsBox.style.display = 'block';
+          custNameEl.textContent = String(cust[CT.NAME] ?? '');
+          custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
+          const ts = cust[CT.TIME_STAMP];
+          custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
+        } else {
           detailsBox.style.display = 'none';
         }
 
-        // If already used, do not allow scratching
+        // If already used, lock immediately
         const isAlreadyUsed = currentStatus.toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
