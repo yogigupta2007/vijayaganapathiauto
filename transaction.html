@@ -20,8 +20,21 @@
     .status{ margin-top:10px; font-size:13px; color:var(--muted); }
     canvas.scratcher{ position:absolute; inset:18px; width:calc(100% - 36px); height:auto; aspect-ratio:16/9; border-radius:14px; display:block; touch-action:none; z-index:10; }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
-    .err{ color:#fda4af; }
+    .err{ color:#f59e0b; }
     code.small{ font-size:12px; color:#9ca3af; word-break:break-all; }
+
+    .details{
+      margin:0 18px 14px 18px;
+      border:1px solid rgba(148,163,184,.15);
+      border-radius:12px;
+      padding:10px 14px;
+      background:rgba(2,6,23,.35);
+      font-size:14px;
+      line-height:1.5;
+      color:#d1d5db;
+    }
+    .details div{ display:flex; justify-content:space-between; gap:10px; }
+    .details .k{ color:var(--muted); }
   </style>
 </head>
 <body>
@@ -38,35 +51,44 @@
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
 
+      <div class="details" id="detailsBox" style="display:none;">
+        <div><span class="k">Customer</span><span id="custName">—</span></div>
+        <div><span class="k">Txn amount</span><span id="custAmt">—</span></div>
+        <div><span class="k">Generated on</span><span id="custTs">—</span></div>
+      </div>
+
       <div class="state" id="stateMsg">Loading…</div>
     </div>
   </div>
 
-    <script type="module">
-    // === CONFIG: REPLACE THESE ===
-    const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co'; // replace
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q'; // replace
-    // ==================================================
+  <script type="module">
+    // === CONFIG: CHANGE THESE TO YOUR PROJECT ===
+    const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
+    // ============================================
     const TABLE = 'Scratchcards';
     const COL = { assignedTo:'assigned_to', prizeAmount:'prize_amount', status:'status' };
 
+    // Customers table (adjust names if yours differ)
+    const CUST_TABLE = 'Customers';
+    const CT = { CID:'CID', NAME:'NAME', AMOUNT:'AMOUNT', TIME_STAMP:'TIME_STAMP' };
+
     const qs = new URLSearchParams(location.search);
-    const linkId = qs.get('id'); // ?id=VALUE
+    const linkId = qs.get('id');
 
     const $ = (id) => document.getElementById(id);
     const amountEl = $('amount'), labelEl=$('label'), statusEl=$('statusText'), stateEl=$('stateMsg'), canvas=$('scratcher');
+    const detailsBox = $('detailsBox'), custNameEl=$('custName'), custAmtEl=$('custAmt'), custTsEl=$('custTs');
 
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
       catch { return '₹ ' + Number(n||0).toLocaleString('en-IN'); }
     };
 
-    // Size canvas to prize and paint gray sheet
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
       const pad = 18;
       const rect = prize.getBoundingClientRect();
-
       const innerWidth = Math.max(0, rect.width - (pad * 2));
       const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
 
@@ -82,14 +104,14 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-      ctx.fillStyle = '#b8c0cc'; // gray overlay
+      ctx.fillStyle = '#b8c0cc';
       ctx.fillRect(0, 0, innerWidth, innerHeight);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('Scratch here', innerWidth / 2, innerHeight / 2);
-      ctx.globalCompositeOperation = 'destination-out'; // erase on draw
+      ctx.globalCompositeOperation = 'destination-out';
     }
 
     async function sbFetch(url, opts){ 
@@ -100,21 +122,20 @@
       try { return JSON.parse(text); } catch { return text; }
     }
 
-    function selectUrl(idVal){
-      return `${SUPABASE_URL}/rest/v1/${TABLE}?select=${COL.prizeAmount},${COL.status},${COL.assignedTo}&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`;
-    }
-    function patchUrl(idVal){
-      return `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`;
-    }
+    const selectUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}?select=${COL.prizeAmount},${COL.status},${COL.assignedTo}&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`;
 
-    async function loadRow(idVal){
-      const url = selectUrl(idVal);
-      return sbFetch(url);
-    }
-    async function markUsed(idVal){
-      const url = patchUrl(idVal);
-      return sbFetch(url, { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
-    }
+    const patchUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`;
+
+    const custSelectUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${CUST_TABLE}?select=${CT.NAME},${CT.AMOUNT},${CT.TIME_STAMP}&${CT.CID}=eq.${encodeURIComponent(idVal)}&limit=1`;
+
+    const loadRow = (idVal) => sbFetch(selectUrl(idVal));
+    const markUsed = (idVal) =>
+      sbFetch(patchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
+
+    const loadCustomer = (idVal) => sbFetch(custSelectUrl(idVal));
 
     class Scratcher {
       constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}) {
@@ -127,18 +148,39 @@
         canvas.addEventListener('pointerup', this._end);
         canvas.addEventListener('pointerleave', this._end);
       }
-      _scratch(e){ const rect=this.canvas.getBoundingClientRect(); const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left; const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top; const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill(); }
-      _check(){ const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data; let clr=0,tot=0; for(let y=0;y<h;y+=step){ for(let x=0;x<w;x+=step){ const a=d[((y*w+x)<<2)+3]; tot++; if(a===0) clr++; } } if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); } }
+      _scratch(e){
+        const rect=this.canvas.getBoundingClientRect();
+        const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left;
+        const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top;
+        const c=this.ctx;
+        c.beginPath();
+        c.arc(x,y,this.brush,0,Math.PI*2);
+        c.fill();
+      }
+      _check(){
+        const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data;
+        let clr=0,tot=0;
+        for(let y=0;y<h;y+=step){
+          for(let x=0;x<w;x+=step){
+            const a=d[((y*w+x)<<2)+3];
+            tot++; if(a===0) clr++;
+          }
+        }
+        if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); }
+      }
       _start(e){ this.down=true; this._scratch(e); }
       _move(e){ if(!this.down) return; this._scratch(e); this._check(); }
       _end(){ this.down=false; this._check(); }
-      revealAll(){ this.ctx.globalCompositeOperation='destination-out'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.canvas.style.pointerEvents='none'; }
+      revealAll(){
+        this.ctx.globalCompositeOperation='destination-out';
+        this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+        this.canvas.style.pointerEvents='none';
+      }
     }
 
     let row=null, revealed=false;
 
     async function init(){
-      // Size and paint overlay first so it’s always visible
       await new Promise(r => requestAnimationFrame(()=>r()));
       sizeCanvasToPrize(canvas);
       window.addEventListener('resize', () => sizeCanvasToPrize(canvas));
@@ -156,32 +198,44 @@
           return;
         }
 
-        // --- NEW: show amount & status and lock if already Used ---
+        // Always show scratchcard values
         amountEl.textContent = fmtINR(row[COL.prizeAmount]);
         const currentStatus = String(row[COL.status] ?? '');
         statusEl.textContent = currentStatus;
         stateEl.textContent = 'Scratch the card to reveal your reward.';
 
+        // Load and show transaction details before scratch
+        try {
+          const custArr = await loadCustomer(linkId);
+          const cust = custArr[0];
+          if (cust) {
+            detailsBox.style.display = 'block';
+            custNameEl.textContent = String(cust[CT.NAME] ?? '');
+            custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
+            const ts = cust[CT.TIME_STAMP];
+            custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
+          }
+        } catch (e) {
+          detailsBox.style.display = 'none';
+        }
+
+        // If already used, do not allow scratching
         const isAlreadyUsed = currentStatus.toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           stateEl.textContent = 'Already used.';
-          canvas.style.pointerEvents = 'none'; // do not allow scratch
-          return; // IMPORTANT: do not create Scratcher
+          canvas.style.pointerEvents = 'none';
+          return;
         }
-        // ----------------------------------------------------------
 
-        const scratcher = new Scratcher(canvas, {
+        new Scratcher(canvas, {
           brush:26, threshold:0.5,
           onReveal: async () => {
             if (revealed) return;
             revealed = true;
-
             labelEl.textContent = 'Reward revealed';
-            // Immediately disable canvas for this session
             canvas.style.pointerEvents = 'none';
 
-            // Only update if not already Used (extra safety)
             const prevStatus = String(row[COL.status] ?? '').toLowerCase();
             if (prevStatus === 'used') {
               stateEl.textContent = 'Already used.';
@@ -194,12 +248,11 @@
               const updated = Array.isArray(updatedRows) ? updatedRows[0] : null;
               const newStatus = String(updated?.[COL.status] ?? 'Used');
               statusEl.textContent = newStatus;
-              // update local copy so future checks see Used
               row[COL.status] = newStatus;
               stateEl.textContent = 'Revealed.';
             }catch(e){
               console.error('PATCH error:', e);
-              stateEl.innerHTML = '<span class="err">Could not update status. Please show this screen to staff.</span>';
+              stateEl.innerHTML = '<span class="err">Revealed. Could not update status.</span>';
             }
           }
         });
