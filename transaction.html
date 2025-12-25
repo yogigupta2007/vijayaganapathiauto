@@ -42,7 +42,7 @@
     </div>
   </div>
 
-  <script type="module">
+    <script type="module">
     // === CONFIG: REPLACE THESE ===
     const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co'; // replace
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q'; // replace
@@ -155,21 +155,47 @@
           stateEl.innerHTML = '<span class="err">No record found for this link.</span>';
           return;
         }
+
+        // --- NEW: show amount & status and lock if already Used ---
         amountEl.textContent = fmtINR(row[COL.prizeAmount]);
-        statusEl.textContent = String(row[COL.status] ?? '');
+        const currentStatus = String(row[COL.status] ?? '');
+        statusEl.textContent = currentStatus;
         stateEl.textContent = 'Scratch the card to reveal your reward.';
+
+        const isAlreadyUsed = currentStatus.toLowerCase() === 'used';
+        if (isAlreadyUsed) {
+          labelEl.textContent = 'Reward revealed';
+          stateEl.textContent = 'Already used.';
+          canvas.style.pointerEvents = 'none'; // do not allow scratch
+          return; // IMPORTANT: do not create Scratcher
+        }
+        // ----------------------------------------------------------
 
         const scratcher = new Scratcher(canvas, {
           brush:26, threshold:0.5,
           onReveal: async () => {
             if (revealed) return;
             revealed = true;
+
             labelEl.textContent = 'Reward revealed';
+            // Immediately disable canvas for this session
+            canvas.style.pointerEvents = 'none';
+
+            // Only update if not already Used (extra safety)
+            const prevStatus = String(row[COL.status] ?? '').toLowerCase();
+            if (prevStatus === 'used') {
+              stateEl.textContent = 'Already used.';
+              return;
+            }
+
             stateEl.textContent = 'Updating status…';
             try{
               const updatedRows = await markUsed(row[COL.assignedTo]);
               const updated = Array.isArray(updatedRows) ? updatedRows[0] : null;
-              statusEl.textContent = String(updated?.[COL.status] ?? 'Used');
+              const newStatus = String(updated?.[COL.status] ?? 'Used');
+              statusEl.textContent = newStatus;
+              // update local copy so future checks see Used
+              row[COL.status] = newStatus;
               stateEl.textContent = 'Revealed.';
             }catch(e){
               console.error('PATCH error:', e);
