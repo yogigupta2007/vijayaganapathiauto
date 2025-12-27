@@ -11,14 +11,23 @@
     body{ margin:0; min-height:100svh; display:grid; place-items:center; background:#0b1020; color:var(--text); padding:16px; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif; }
     .wrap{ width:100%; max-width:420px; }
     .card{ background:#0a1020; border:1px solid rgba(148,163,184,.15); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden; }
-    .hdr{ padding:16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
-    .hdr h1{ margin:0; font-size:18px; }
+    .hdr{ padding:12px 18px 16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
     .scratch-area{ position:relative; padding:18px; }
     .prize{ position:relative; border-radius:14px; background:linear-gradient(180deg,rgba(2,6,23,.9),rgba(2,6,23,.85)); border:1px solid rgba(148,163,184,.18); padding:28px 20px; text-align:center; overflow:hidden; }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
     .status{ margin-top:10px; font-size:13px; color:var(--muted); }
-    canvas.scratcher{ position:absolute; inset:18px; width:calc(100% - 36px); height:auto; aspect-ratio:16/9; border-radius:14px; display:block; touch-action:none; z-index:10; }
+    canvas.scratcher{
+      position:absolute;
+      inset:18px;
+      width:calc(100% - 36px);
+      height:auto;
+      aspect-ratio:16/9;
+      border-radius:14px;
+      display:block;
+      touch-action:none;
+      z-index:10;
+    }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
     code.small{ font-size:12px; color:#9ca3af; word-break:break-all; }
@@ -60,12 +69,23 @@
 <body>
   <div class="wrap">
     <div class="card">
+
+      <!-- Logo -->
       <div style="text-align:center; padding-top:16px;">
-        <img src="IndianOil-Preview.png"
+        <img src="IndianOil-Preview.jpg"
              alt="IndianOil"
              style="height:60px; width:auto;" />
       </div>
-      <div class="hdr"><h1>Sri Vyshnavi Service Station - Kistaram, Telangana</h1></div>
+
+      <!-- Header + location -->
+      <div class="hdr">
+        <h1 style="margin:0; font-size:18px; text-align:center;">
+          Sri Vyshnavi Service Station
+        </h1>
+        <div style="margin-top:4px; font-size:14px; color:#cbd5f5; text-align:center;">
+          Kistaram, Telangana
+        </div>
+      </div>
 
       <div class="scratch-area">
         <div class="prize" id="prize">
@@ -89,10 +109,9 @@
   </div>
 
   <script type="module">
-    // === CONFIG: CHANGE THESE TO YOUR PROJECT ===
     const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
-    // ============================================
+
     const TABLE = 'Scratchcards';
     const COL = { assignedTo:'assigned_to', prizeAmount:'prize_amount', status:'status' };
 
@@ -125,7 +144,7 @@
       const innerWidth = Math.max(0, rect.width - (pad * 2));
       const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
 
-      canvasEl.style.inset = `${pad}px ${pad}px ${pad}px ${pad}px`;
+      canvasEl.style.inset = `${pad}px`;
       canvasEl.style.width = `${innerWidth}px`;
       canvasEl.style.height = `${innerHeight}px`;
 
@@ -136,7 +155,7 @@
       const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
       ctx.fillStyle = '#b8c0cc';
       ctx.fillRect(0, 0, innerWidth, innerHeight);
       ctx.fillStyle = '#6b7280';
@@ -256,7 +275,7 @@
           detailsBox.style.display = 'none';
         }
 
-        // Check if already used (DB has 'Used'), show red pill warning below
+        // Already used? (DB status = Used) -> show red pill below, lock scratch
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
@@ -265,7 +284,7 @@
           return;
         }
 
-        // Fresh card - enable scratching
+        // Fresh card
         new Scratcher(canvas, {
           brush:26, threshold:0.5,
           onReveal: async () => {
@@ -277,7 +296,6 @@
             stateEl.textContent = 'Updating status…';
             try{
               await markUsed(row[COL.assignedTo]);
-              // Status stays "Assigned" in UI (green pill), DB gets "Used"
               stateEl.textContent = 'Revealed.';
             }catch(e){
               console.error('PATCH error:', e);
