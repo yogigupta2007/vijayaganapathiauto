@@ -36,17 +36,24 @@
     .details div{ display:flex; justify-content:space-between; gap:10px; }
     .details .k{ color:var(--muted); }
 
-    .used-badge{
+    /* Pill badges */
+    .pill{
       display:inline-block;
       padding:2px 8px;
       border-radius:999px;
-      background:#b91c1c;
-      color:#fee2e2;
       font-size:11px;
       font-weight:600;
       margin-left:6px;
       text-transform:uppercase;
       letter-spacing:0.03em;
+    }
+    .pill-success{
+      background:#14532d;
+      color:#bbf7d0;
+    }
+    .pill-danger{
+      background:#b91c1c;
+      color:#fee2e2;
     }
   </style>
 </head>
@@ -77,9 +84,10 @@
   </div>
 
   <script type="module">
+    // === CONFIG: CHANGE THESE TO YOUR PROJECT ===
     const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
-
+    // ============================================
     const TABLE = 'Scratchcards';
     const COL = { assignedTo:'assigned_to', prizeAmount:'prize_amount', status:'status' };
 
@@ -97,17 +105,8 @@
     const linkId = qs.get('id');
 
     const $ = (id) => document.getElementById(id);
-    const amountEl = $('amount'),
-          labelEl = $('label'),
-          statusEl = $('statusText'),
-          stateEl = $('stateMsg'),
-          canvas  = $('scratcher');
-    const detailsBox   = $('detailsBox'),
-          custNameEl   = $('custName'),
-          custAmtEl    = $('custAmt'),
-          custTsEl     = $('custTs'),
-          custNumberEl = $('custNumber'),
-          custFuelEl   = $('custFuel');
+    const amountEl = $('amount'), labelEl=$('label'), statusEl=$('statusText'), stateEl=$('stateMsg'), canvas=$('scratcher');
+    const detailsBox = $('detailsBox'), custNameEl=$('custName'), custAmtEl=$('custAmt'), custTsEl=$('custTs'), custNumberEl=$('custNumber'), custFuelEl=$('custFuel');
 
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
@@ -144,12 +143,7 @@
     }
 
     async function sbFetch(url, opts){
-      const h = {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization:'Bearer '+SUPABASE_ANON_KEY,
-        'Content-Type':'application/json',
-        ...(opts?.headers||{})
-      };
+      const h = { apikey: SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', ...(opts?.headers||{}) };
       const res = await fetch(url, { ...opts, headers: h });
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
@@ -167,11 +161,7 @@
 
     const loadRow = (idVal) => sbFetch(selectUrl(idVal));
     const markUsed = (idVal) =>
-      sbFetch(patchUrl(idVal), {
-        method:'PATCH',
-        headers:{ Prefer:'return=representation' },
-        body: JSON.stringify({ [COL.status]:'Used' })
-      });
+      sbFetch(patchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
 
     const loadCustomer = (idVal) => sbFetch(custSelectUrl(idVal));
 
@@ -179,13 +169,8 @@
       constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d', { willReadFrequently:true });
-        this.brush = brush;
-        this.threshold = threshold;
-        this.onReveal = onReveal;
-        this.down=false;
-        this._start=this._start.bind(this);
-        this._move=this._move.bind(this);
-        this._end=this._end.bind(this);
+        this.brush = brush; this.threshold = threshold; this.onReveal = onReveal; this.down=false;
+        this._start=this._start.bind(this); this._move=this._move.bind(this); this._end=this._end.bind(this);
         canvas.addEventListener('pointerdown', this._start);
         canvas.addEventListener('pointermove', this._move);
         canvas.addEventListener('pointerup', this._end);
@@ -245,42 +230,37 @@
           return;
         }
 
-        // Scratchcard values
+        // Scratchcard values - ALWAYS show Assigned with green pill
         amountEl.textContent = fmtINR(row[COL.prizeAmount]);
-        const currentStatus = String(row[COL.status] ?? '');
-        statusEl.textContent = currentStatus;
-
-        if (currentStatus.toLowerCase() === 'used') {
-          statusEl.classList.add('used-badge');
-        }
+        statusEl.textContent = 'Assigned';
+        statusEl.classList.add('pill', 'pill-success');
 
         stateEl.textContent = 'Scratch the card to reveal your reward.';
 
-        // Transaction + customer details
+        // Customer details
         const cust = custArr && custArr[0];
         if (cust) {
           detailsBox.style.display = 'block';
-          custNameEl.textContent   = String(cust[CT.NAME] ?? '');
-          custAmtEl.textContent    = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
+          custNameEl.textContent = String(cust[CT.NAME] ?? '');
+          custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
           custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
-          custFuelEl.textContent   = String(cust[CT.FUEL_TYPE] ?? '—');
-
+          custFuelEl.textContent = String(cust[CT.FUEL_TYPE] ?? '—');
           const ts = cust[CT.TIME_STAMP];
-          custTsEl.textContent = ts
-            ? new Date(ts).toLocaleString('en-IN')
-            : '';
+          custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
         } else {
           detailsBox.style.display = 'none';
         }
 
-        const isAlreadyUsed = currentStatus.toLowerCase() === 'used';
+        // Check if already used (DB has 'Used'), show red pill warning below
+        const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
-          stateEl.textContent = 'Already used.';
+          stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           canvas.style.pointerEvents = 'none';
           return;
         }
 
+        // Fresh card - enable scratching
         new Scratcher(canvas, {
           brush:26, threshold:0.5,
           onReveal: async () => {
@@ -289,28 +269,14 @@
             labelEl.textContent = 'Reward revealed';
             canvas.style.pointerEvents = 'none';
 
-            const prevStatus = String(row[COL.status] ?? '').toLowerCase();
-            if (prevStatus === 'used') {
-              stateEl.textContent = 'Already used.';
-              return;
-            }
-
             stateEl.textContent = 'Updating status…';
             try{
-              const updatedRows = await markUsed(row[COL.assignedTo]);
-              const updated = Array.isArray(updatedRows) ? updatedRows[0] : null;
-              const newStatus = String(updated?.[COL.status] ?? 'Used');
-              statusEl.textContent = newStatus;
-              row[COL.status] = newStatus;
-
-              if (newStatus.toLowerCase() === 'used') {
-                statusEl.classList.add('used-badge');
-              }
-
+              await markUsed(row[COL.assignedTo]);
+              // Status stays "Assigned" in UI (green pill), DB gets "Used"
               stateEl.textContent = 'Revealed.';
             }catch(e){
               console.error('PATCH error:', e);
-              stateEl.innerHTML = '<span class="err">Revealed. Could not update status.</span>';
+              stateEl.textContent = 'Revealed.';
             }
           }
         });
