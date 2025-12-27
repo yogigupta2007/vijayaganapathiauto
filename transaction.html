@@ -13,7 +13,15 @@
     .card{ background:#0a1020; border:1px solid rgba(148,163,184,.15); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden; }
     .hdr{ padding:12px 18px 16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
     .scratch-area{ position:relative; padding:18px; }
-    .prize{ position:relative; border-radius:14px; background:linear-gradient(180deg,rgba(2,6,23,.9),rgba(2,6,23,.85)); border:1px solid rgba(148,163,184,.18); padding:28px 20px; text-align:center; overflow:hidden; }
+    .prize{
+      position:relative;
+      border-radius:14px;
+      background:linear-gradient(180deg,rgba(2,6,23,.9),rgba(2,6,23,.85));
+      border:1px solid rgba(148,163,184,.18);
+      padding:28px 20px;
+      text-align:center;
+      overflow:hidden;
+    }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
     .status{ margin-top:10px; font-size:13px; color:var(--muted); }
@@ -129,8 +137,17 @@
     const linkId = qs.get('id');
 
     const $ = (id) => document.getElementById(id);
-    const amountEl = $('amount'), labelEl=$('label'), statusEl=$('statusText'), stateEl=$('stateMsg'), canvas=$('scratcher');
-    const detailsBox = $('detailsBox'), custNameEl=$('custName'), custAmtEl=$('custAmt'), custTsEl=$('custTs'), custNumberEl=$('custNumber'), custFuelEl=$('custFuel');
+    const amountEl = $('amount'),
+          labelEl  = $('label'),
+          statusEl = $('statusText'),
+          stateEl  = $('stateMsg'),
+          canvas   = $('scratcher');
+    const detailsBox   = $('detailsBox'),
+          custNameEl   = $('custName'),
+          custAmtEl    = $('custAmt'),
+          custTsEl     = $('custTs'),
+          custNumberEl = $('custNumber'),
+          custFuelEl   = $('custFuel');
 
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
@@ -140,8 +157,11 @@
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
       const pad = 18;
-      const rect = prize.getBoundingClientRect();
-      const innerWidth = Math.max(0, rect.width - (pad * 2));
+
+      // Use scratch-area width so overlay matches underlying block across devices
+      const scratchArea = prize.parentElement; // .scratch-area
+      const saRect = scratchArea.getBoundingClientRect();
+      const innerWidth = Math.max(0, saRect.width - (pad * 2));
       const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
 
       canvasEl.style.inset = `${pad}px`;
@@ -167,7 +187,12 @@
     }
 
     async function sbFetch(url, opts){
-      const h = { apikey: SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', ...(opts?.headers||{}) };
+      const h = {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization:'Bearer '+SUPABASE_ANON_KEY,
+        'Content-Type':'application/json',
+        ...(opts?.headers||{})
+      };
       const res = await fetch(url, { ...opts, headers: h });
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
@@ -185,7 +210,11 @@
 
     const loadRow = (idVal) => sbFetch(selectUrl(idVal));
     const markUsed = (idVal) =>
-      sbFetch(patchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
+      sbFetch(patchUrl(idVal), {
+        method:'PATCH',
+        headers:{ Prefer:'return=representation' },
+        body: JSON.stringify({ [COL.status]:'Used' })
+      });
 
     const loadCustomer = (idVal) => sbFetch(custSelectUrl(idVal));
 
@@ -193,8 +222,13 @@
       constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d', { willReadFrequently:true });
-        this.brush = brush; this.threshold = threshold; this.onReveal = onReveal; this.down=false;
-        this._start=this._start.bind(this); this._move=this._move.bind(this); this._end=this._end.bind(this);
+        this.brush = brush;
+        this.threshold = threshold;
+        this.onReveal = onReveal;
+        this.down=false;
+        this._start=this._start.bind(this);
+        this._move=this._move.bind(this);
+        this._end=this._end.bind(this);
         canvas.addEventListener('pointerdown', this._start);
         canvas.addEventListener('pointermove', this._move);
         canvas.addEventListener('pointerup', this._end);
@@ -266,9 +300,9 @@
         if (cust) {
           detailsBox.style.display = 'block';
           custNameEl.textContent = String(cust[CT.NAME] ?? '');
-          custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
-          custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
-          custFuelEl.textContent = String(cust[CT.FUEL_TYPE] ?? '—');
+          custAmtEl.textContent   = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
+          custNumberEl.textContent= String(cust[CT.NUMBER] ?? '—');
+          custFuelEl.textContent  = String(cust[CT.FUEL_TYPE] ?? '—');
           const ts = cust[CT.TIME_STAMP];
           custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
         } else {
@@ -295,7 +329,7 @@
 
             stateEl.textContent = 'Updating status…';
             try{
-              await markUsed(row[COL.assignedTo]);
+              await markUsed(row[COL.assignedTo]);   // DB -> Used
               stateEl.textContent = 'Revealed.';
             }catch(e){
               console.error('PATCH error:', e);
