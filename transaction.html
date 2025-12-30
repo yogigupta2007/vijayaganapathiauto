@@ -35,6 +35,11 @@
       touch-action:none;
       z-index:10;
     }
+    canvas.scratcher.used-overlay{
+      pointer-events: none;
+      opacity: 0.3;
+      background: rgba(107,114,128,0.9);
+    }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
     code.small{ font-size:12px; color:#9ca3af; word-break:break-all; }
@@ -75,9 +80,6 @@
       background:#d97706;
       color:#fef3c7;
     }
-
-    /* ONLY CHANGE: Hide canvas for used cards */
-    .scratch-area.used .scratcher { display: none !important; }
   </style>
 </head>
 <body>
@@ -101,10 +103,11 @@
         </div>
       </div>
 
-      <div class="scratch-area" id="scratchArea">
+      <div class="scratch-area">
         <div class="prize" id="prize">
           <div class="label" id="label">Scratch to reveal</div>
           <div class="amount" id="amount">₹ — — —</div>
+          <!-- Status line REMOVED -->
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
@@ -152,7 +155,6 @@
           custTsEl     = $('custTs'),
           custNumberEl = $('custNumber'),
           custFuelEl   = $('custFuel');
-    const scratchArea = $('scratchArea');  // ADDED: Reference to scratchArea
 
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
@@ -292,7 +294,7 @@
           return;
         }
 
-        // Show Congrats or Better Luck based on prize amount
+        // Show prize amount and label FIRST (for both fresh and used cards)
         const prizeAmount = Number(row[COL.prizeAmount] || 0);
         amountEl.textContent = fmtINR(prizeAmount);
         
@@ -303,8 +305,6 @@
           labelEl.textContent = 'Better luck next time';
           labelEl.classList.add('pill', 'pill-yellow');
         }
-
-        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Customer details
         const cust = custArr && custArr[0];
@@ -320,16 +320,18 @@
           detailsBox.style.display = 'none';
         }
 
-        // Already used check - ONLY hide canvas, show prize clearly
+        // Already used check
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
-          stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
-          scratchArea.classList.add('used');  // ONLY CHANGE: Add 'used' class to hide canvas
+          canvas.classList.add('used-overlay');
           canvas.style.pointerEvents = 'none';
+          stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           return;
         }
+
+        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Fresh card scratching
         new Scratcher(canvas, {
