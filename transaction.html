@@ -12,7 +12,7 @@
     .wrap{ width:100%; max-width:420px; }
     .card{ background:#0a1020; border:1px solid rgba(148,163,184,.15); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden; }
     .hdr{ padding:12px 18px 16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
-    .scratch-area{ position:relative; padding:18px; }
+    .scratch-area{ position:relative; padding:18px 18px 0 18px; } /* TOP padding only */
     .prize{
       position:relative;
       border-radius:14px;
@@ -21,15 +21,15 @@
       padding:28px 20px;
       text-align:center;
       overflow:hidden;
+      margin-bottom:6px; /* Exact spacing to details */
     }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
     canvas.scratcher{
       position:absolute;
-      inset:18px;
-      width:calc(100% - 36px);
-      height:auto;
-      aspect-ratio:16/9;
+      inset:0;
+      width:100%;
+      height:100%;
       border-radius:14px;
       display:block;
       touch-action:none;
@@ -118,30 +118,23 @@
 
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
-      const pad = 18;
-      const scratchArea = prize.parentElement;
-      const saRect = scratchArea.getBoundingClientRect();
-      const innerWidth = Math.max(0, saRect.width - (pad * 2));
-      const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
-
-      canvasEl.style.inset = `${pad}px`;
-      canvasEl.style.width = `${innerWidth}px`;
-      canvasEl.style.height = `${innerHeight}px`;
-
+      const rect = prize.getBoundingClientRect();
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvasEl.width = Math.floor(innerWidth * dpr);
-      canvasEl.height = Math.floor(innerHeight * dpr);
-
+      
+      canvasEl.width = Math.floor(rect.width * dpr);
+      canvasEl.height = Math.floor(rect.height * dpr);
+      
       const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      
+      ctx.clearRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = '#b8c0cc';
-      ctx.fillRect(0, 0, innerWidth, innerHeight);
+      ctx.fillRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Scratch here', innerWidth / 2, innerHeight / 2);
+      ctx.fillText('Scratch here', rect.width / 2, rect.height / 2);
       ctx.globalCompositeOperation = 'destination-out';
     }
 
@@ -210,7 +203,7 @@
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
-          canvas.classList.add('used');  // ✅ Hides canvas - prize fully visible
+          canvas.classList.add('used');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           return;
         }
