@@ -35,11 +35,6 @@
       touch-action:none;
       z-index:10;
     }
-    canvas.scratcher.used-overlay{
-      pointer-events: none;
-      opacity: 0.3;
-      background: rgba(107,114,128,0.9);
-    }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
     code.small{ font-size:12px; color:#9ca3af; word-break:break-all; }
@@ -294,7 +289,7 @@
           return;
         }
 
-        // Show prize amount and label FIRST (for both fresh and used cards)
+        // Show Congrats or Better Luck based on prize amount
         const prizeAmount = Number(row[COL.prizeAmount] || 0);
         amountEl.textContent = fmtINR(prizeAmount);
         
@@ -305,6 +300,8 @@
           labelEl.textContent = 'Better luck next time';
           labelEl.classList.add('pill', 'pill-yellow');
         }
+
+        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Customer details
         const cust = custArr && custArr[0];
@@ -325,13 +322,10 @@
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
-          canvas.classList.add('used-overlay');
-          canvas.style.pointerEvents = 'none';
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
+          canvas.style.pointerEvents = 'none';
           return;
         }
-
-        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Fresh card scratching
         new Scratcher(canvas, {
