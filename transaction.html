@@ -26,26 +26,14 @@
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
     canvas.scratcher{
       position:absolute;
-      inset:18px;
-      width:calc(100% - 36px);
-      height:auto;
-      aspect-ratio:16/9;
+      top:18px; left:18px; right:18px; bottom:18px;
       border-radius:14px;
       display:block;
       touch-action:none;
       z-index:10;
     }
-    .used-overlay{
-      position:absolute;
-      inset:18px;
-      width:calc(100% - 36px);
-      height:auto;
-      aspect-ratio:16/9;
-      border-radius:14px;
-      background:rgba(107,114,128,0.9);
-      z-index:11;
-      pointer-events:none;
-      display:none;
+    canvas.scratcher.used{
+      display: none;
     }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
@@ -116,7 +104,6 @@
           <div class="amount" id="amount">₹ — — —</div>
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
-        <div class="used-overlay" id="usedOverlay"></div>
       </div>
 
       <div class="details" id="detailsBox" style="display:none;">
@@ -155,8 +142,7 @@
     const amountEl = $('amount'),
           labelEl  = $('label'),
           stateEl  = $('stateMsg'),
-          canvas   = $('scratcher'),
-          usedOverlay = $('usedOverlay');
+          canvas   = $('scratcher');
     const detailsBox   = $('detailsBox'),
           custNameEl   = $('custName'),
           custAmtEl    = $('custAmt'),
@@ -169,40 +155,24 @@
       catch { return '₹ ' + Number(n||0).toLocaleString('en-IN'); }
     };
 
-    function sizeCanvasToPrize() {
-      const prize = document.getElementById('prize');
-      const pad = 18;
-
-      const scratchArea = prize.parentElement;
-      const saRect = scratchArea.getBoundingClientRect();
-      const innerWidth = Math.max(0, saRect.width - (pad * 2));
-      const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
-
-      // Size canvas
-      canvas.style.inset = `${pad}px`;
-      canvas.style.width = `${innerWidth}px`;
-      canvas.style.height = `${innerHeight}px`;
-
-      // Size overlay (exact same dimensions)
-      usedOverlay.style.inset = `${pad}px`;
-      usedOverlay.style.width = `${innerWidth}px`;
-      usedOverlay.style.height = `${innerHeight}px`;
-
+    function sizeCanvasToPrize(canvasEl) {
+      const rect = canvasEl.parentElement.getBoundingClientRect();
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvas.width = Math.floor(innerWidth * dpr);
-      canvas.height = Math.floor(innerHeight * dpr);
-
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      
+      canvasEl.width = Math.floor(rect.width * dpr);
+      canvasEl.height = Math.floor(rect.height * dpr);
+      
+      const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      ctx.clearRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = '#b8c0cc';
-      ctx.fillRect(0, 0, innerWidth, innerHeight);
+      ctx.fillRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Scratch here', innerWidth / 2, innerHeight / 2);
+      ctx.fillText('Scratch here', rect.width / 2, rect.height / 2);
       ctx.globalCompositeOperation = 'destination-out';
     }
 
@@ -288,8 +258,8 @@
 
     async function init(){
       await new Promise(r => requestAnimationFrame(()=>r()));
-      sizeCanvasToPrize();
-      window.addEventListener('resize', () => sizeCanvasToPrize());
+      sizeCanvasToPrize(canvas);
+      window.addEventListener('resize', () => sizeCanvasToPrize(canvas));
 
       if (!linkId){
         stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>';
@@ -334,12 +304,12 @@
           detailsBox.style.display = 'none';
         }
 
-        // Already used check
+        // Already used check - COMPLETE PRIZE VISIBILITY
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
-          usedOverlay.style.display = 'block';
+          canvas.classList.add('used'); // Hides scratch canvas completely
           canvas.style.pointerEvents = 'none';
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           return;
