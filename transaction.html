@@ -21,6 +21,7 @@
       padding:28px 20px;
       text-align:center;
       overflow:hidden;
+      z-index:1;
     }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
@@ -76,10 +77,9 @@
       color:#fef3c7;
     }
 
-    /* Used state - gray overlay ON TOP of scratch area */
+    /* Used state - HIDE canvas completely, show only prize */
     .scratch-area.used .scratcher{
-      background:rgba(128,128,128,0.95) !important;
-      z-index:20 !important;
+      display: none !important;
     }
   </style>
 </head>
@@ -321,19 +321,14 @@
           detailsBox.style.display = 'none';
         }
 
-        // Already used check - add gray overlay but fully reveal canvas underneath
+        // Already used check - SIMPLY HIDE THE CANVAS
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           
-          // Fully reveal the scratch canvas first (clear it completely)
-          const ctx = canvas.getContext('2d');
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Then add gray overlay on the scratch-area container
+          // Just hide the canvas completely - prize shows perfectly clear
           scratchArea.classList.add('used');
           canvas.style.pointerEvents = 'none';
           return;
