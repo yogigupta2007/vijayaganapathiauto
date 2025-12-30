@@ -24,7 +24,6 @@
     }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
-    .status{ margin-top:10px; font-size:13px; color:var(--muted); }
     canvas.scratcher{
       position:absolute;
       inset:18px;
@@ -72,6 +71,10 @@
       background:#b91c1c;
       color:#fee2e2;
     }
+    .pill-yellow{
+      background:#d97706;
+      color:#fef3c7;
+    }
   </style>
 </head>
 <body>
@@ -99,7 +102,7 @@
         <div class="prize" id="prize">
           <div class="label" id="label">Scratch to reveal</div>
           <div class="amount" id="amount">₹ — — —</div>
-          <div class="status">Status: <span id="statusText">—</span></div>
+          <!-- Status line REMOVED -->
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
@@ -139,7 +142,6 @@
     const $ = (id) => document.getElementById(id);
     const amountEl = $('amount'),
           labelEl  = $('label'),
-          statusEl = $('statusText'),
           stateEl  = $('stateMsg'),
           canvas   = $('scratcher');
     const detailsBox   = $('detailsBox'),
@@ -158,8 +160,7 @@
       const prize = document.getElementById('prize');
       const pad = 18;
 
-      // Use scratch-area width so overlay matches underlying block across devices
-      const scratchArea = prize.parentElement; // .scratch-area
+      const scratchArea = prize.parentElement;
       const saRect = scratchArea.getBoundingClientRect();
       const innerWidth = Math.max(0, saRect.width - (pad * 2));
       const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
@@ -288,10 +289,17 @@
           return;
         }
 
-        // Scratchcard values - ALWAYS show Assigned with green pill
-        amountEl.textContent = fmtINR(row[COL.prizeAmount]);
-        statusEl.textContent = 'Assigned';
-        statusEl.classList.add('pill', 'pill-success');
+        // Show Congrats or Better Luck based on prize amount
+        const prizeAmount = Number(row[COL.prizeAmount] || 0);
+        amountEl.textContent = fmtINR(prizeAmount);
+        
+        if (prizeAmount > 0) {
+          labelEl.textContent = 'Congratulations';
+          labelEl.classList.add('pill', 'pill-success');
+        } else {
+          labelEl.textContent = 'Better luck next time';
+          labelEl.classList.add('pill', 'pill-yellow');
+        }
 
         stateEl.textContent = 'Scratch the card to reveal your reward.';
 
@@ -300,36 +308,36 @@
         if (cust) {
           detailsBox.style.display = 'block';
           custNameEl.textContent = String(cust[CT.NAME] ?? '');
-          custAmtEl.textContent   = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
-          custNumberEl.textContent= String(cust[CT.NUMBER] ?? '—');
-          custFuelEl.textContent  = String(cust[CT.FUEL_TYPE] ?? '—');
+          custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
+          custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
+          custFuelEl.textContent = String(cust[CT.FUEL_TYPE] ?? '—');
           const ts = cust[CT.TIME_STAMP];
           custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
         } else {
           detailsBox.style.display = 'none';
         }
 
-        // Already used? (DB status = Used) -> show red pill below, lock scratch
+        // Already used check
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
+          labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           canvas.style.pointerEvents = 'none';
           return;
         }
 
-        // Fresh card
+        // Fresh card scratching
         new Scratcher(canvas, {
           brush:26, threshold:0.5,
           onReveal: async () => {
             if (revealed) return;
             revealed = true;
-            labelEl.textContent = 'Reward revealed';
             canvas.style.pointerEvents = 'none';
 
             stateEl.textContent = 'Updating status…';
             try{
-              await markUsed(row[COL.assignedTo]);   // DB -> Used
+              await markUsed(row[COL.assignedTo]);
               stateEl.textContent = 'Revealed.';
             }catch(e){
               console.error('PATCH error:', e);
