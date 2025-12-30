@@ -35,11 +35,6 @@
       touch-action:none;
       z-index:10;
     }
-    canvas.scratcher.used-overlay{
-      background:rgba(128,128,128,0.92);
-      z-index:15;
-      pointer-events:none;
-    }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
     code.small{ font-size:12px; color:#9ca3af; word-break:break-all; }
@@ -80,6 +75,12 @@
       background:#d97706;
       color:#fef3c7;
     }
+
+    /* Used state - gray overlay ON TOP of scratch area */
+    .scratch-area.used .scratcher{
+      background:rgba(128,128,128,0.95) !important;
+      z-index:20 !important;
+    }
   </style>
 </head>
 <body>
@@ -103,11 +104,10 @@
         </div>
       </div>
 
-      <div class="scratch-area">
+      <div class="scratch-area" id="scratchArea">
         <div class="prize" id="prize">
           <div class="label" id="label">Scratch to reveal</div>
           <div class="amount" id="amount">₹ — — —</div>
-          <!-- Status line REMOVED -->
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
@@ -155,6 +155,7 @@
           custTsEl     = $('custTs'),
           custNumberEl = $('custNumber'),
           custFuelEl   = $('custFuel');
+    const scratchArea = $('scratchArea');
 
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
@@ -320,20 +321,21 @@
           detailsBox.style.display = 'none';
         }
 
-        // Already used check - show gray overlay but keep prize visible
+        // Already used check - add gray overlay but fully reveal canvas underneath
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
-          canvas.classList.add('used-overlay');
-          canvas.style.pointerEvents = 'none';
-          // Fully reveal scratch layer so prize shows through gray overlay
+          
+          // Fully reveal the scratch canvas first (clear it completely)
           const ctx = canvas.getContext('2d');
           ctx.globalCompositeOperation = 'destination-out';
-          const dpr = Math.max(1, window.devicePixelRatio || 1);
-          const rect = canvas.getBoundingClientRect();
-          ctx.fillRect(0, 0, rect.width * dpr, rect.height * dpr);
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Then add gray overlay on the scratch-area container
+          scratchArea.classList.add('used');
+          canvas.style.pointerEvents = 'none';
           return;
         }
 
