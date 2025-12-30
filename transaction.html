@@ -35,10 +35,17 @@
       touch-action:none;
       z-index:10;
     }
-    canvas.scratcher.used-overlay{
-      pointer-events: none;
-      opacity: 0.85;
-      mix-blend-mode: multiply;
+    .used-overlay{
+      position:absolute;
+      inset:18px;
+      width:calc(100% - 36px);
+      height:auto;
+      aspect-ratio:16/9;
+      border-radius:14px;
+      background:rgba(107,114,128,0.9);
+      z-index:11;
+      pointer-events:none;
+      display:none;
     }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
@@ -107,9 +114,9 @@
         <div class="prize" id="prize">
           <div class="label" id="label">Scratch to reveal</div>
           <div class="amount" id="amount">₹ — — —</div>
-          <!-- Status line REMOVED -->
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
+        <div class="used-overlay" id="usedOverlay"></div>
       </div>
 
       <div class="details" id="detailsBox" style="display:none;">
@@ -148,7 +155,8 @@
     const amountEl = $('amount'),
           labelEl  = $('label'),
           stateEl  = $('stateMsg'),
-          canvas   = $('scratcher');
+          canvas   = $('scratcher'),
+          usedOverlay = $('usedOverlay');
     const detailsBox   = $('detailsBox'),
           custNameEl   = $('custName'),
           custAmtEl    = $('custAmt'),
@@ -161,7 +169,7 @@
       catch { return '₹ ' + Number(n||0).toLocaleString('en-IN'); }
     };
 
-    function sizeCanvasToPrize(canvasEl) {
+    function sizeCanvasToPrize() {
       const prize = document.getElementById('prize');
       const pad = 18;
 
@@ -170,15 +178,21 @@
       const innerWidth = Math.max(0, saRect.width - (pad * 2));
       const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
 
-      canvasEl.style.inset = `${pad}px`;
-      canvasEl.style.width = `${innerWidth}px`;
-      canvasEl.style.height = `${innerHeight}px`;
+      // Size canvas
+      canvas.style.inset = `${pad}px`;
+      canvas.style.width = `${innerWidth}px`;
+      canvas.style.height = `${innerHeight}px`;
+
+      // Size overlay (exact same dimensions)
+      usedOverlay.style.inset = `${pad}px`;
+      usedOverlay.style.width = `${innerWidth}px`;
+      usedOverlay.style.height = `${innerHeight}px`;
 
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvasEl.width = Math.floor(innerWidth * dpr);
-      canvasEl.height = Math.floor(innerHeight * dpr);
+      canvas.width = Math.floor(innerWidth * dpr);
+      canvas.height = Math.floor(innerHeight * dpr);
 
-      const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       ctx.clearRect(0, 0, innerWidth, innerHeight);
@@ -274,8 +288,8 @@
 
     async function init(){
       await new Promise(r => requestAnimationFrame(()=>r()));
-      sizeCanvasToPrize(canvas);
-      window.addEventListener('resize', () => sizeCanvasToPrize(canvas));
+      sizeCanvasToPrize();
+      window.addEventListener('resize', () => sizeCanvasToPrize());
 
       if (!linkId){
         stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>';
@@ -325,7 +339,7 @@
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
-          canvas.classList.add('used-overlay');
+          usedOverlay.style.display = 'block';
           canvas.style.pointerEvents = 'none';
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           return;
