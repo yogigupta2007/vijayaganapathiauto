@@ -12,7 +12,7 @@
     .wrap{ width:100%; max-width:420px; }
     .card{ background:#0a1020; border:1px solid rgba(148,163,184,.15); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden; }
     .hdr{ padding:12px 18px 16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
-    .scratch-area{ position:relative; padding:18px 18px 0 18px; } /* TOP padding only */
+    .scratch-area{ position:relative; padding:18px 18px 0 18px; }
     .prize{
       position:relative;
       border-radius:14px;
@@ -21,15 +21,12 @@
       padding:28px 20px;
       text-align:center;
       overflow:hidden;
-      margin-bottom:6px; /* Exact spacing to details */
+      margin-bottom:6px;
     }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
     canvas.scratcher{
       position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
       border-radius:14px;
       display:block;
       touch-action:none;
@@ -118,23 +115,30 @@
 
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
-      const rect = prize.getBoundingClientRect();
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const scratchAreaRect = prize.parentElement.getBoundingClientRect();
+      const prizeRect = prize.getBoundingClientRect();
       
-      canvasEl.width = Math.floor(rect.width * dpr);
-      canvasEl.height = Math.floor(rect.height * dpr);
+      // EXACT pixel positioning to match prize rectangle
+      canvasEl.style.left = `${prizeRect.left - scratchAreaRect.left}px`;
+      canvasEl.style.top = `${prizeRect.top - scratchAreaRect.top}px`;
+      canvasEl.style.width = `${prizeRect.width}px`;
+      canvasEl.style.height = `${prizeRect.height}px`;
+      
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvasEl.width = Math.floor(prizeRect.width * dpr);
+      canvasEl.height = Math.floor(prizeRect.height * dpr);
       
       const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       
-      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.clearRect(0, 0, prizeRect.width, prizeRect.height);
       ctx.fillStyle = '#b8c0cc';
-      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.fillRect(0, 0, prizeRect.width, prizeRect.height);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Scratch here', rect.width / 2, rect.height / 2);
+      ctx.fillText('Scratch here', prizeRect.width / 2, prizeRect.height / 2);
       ctx.globalCompositeOperation = 'destination-out';
     }
 
