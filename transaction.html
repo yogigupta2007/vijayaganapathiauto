@@ -21,7 +21,6 @@
       padding:28px 20px;
       text-align:center;
       overflow:hidden;
-      z-index:1;
     }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
     .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
@@ -35,19 +34,6 @@
       display:block;
       touch-action:none;
       z-index:10;
-    }
-    /* MOBILE ONLY - Perfect canvas fit for touch devices */
-    @media (max-width: 480px) {
-      canvas.scratcher{
-        position:absolute !important;
-        left:18px !important;
-        top:18px !important;
-        inset:unset !important;
-        width:calc(100% - 36px) !important;
-        height:auto !important;
-        aspect-ratio:16/9 !important;
-        border-radius:14px !important;
-      }
     }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
@@ -90,10 +76,8 @@
       color:#fef3c7;
     }
 
-    /* Used state - HIDE canvas completely */
-    .scratch-area.used .scratcher{
-      display: none !important;
-    }
+    /* ONLY CHANGE: Hide canvas for used cards */
+    .scratch-area.used .scratcher { display: none !important; }
   </style>
 </head>
 <body>
@@ -168,7 +152,7 @@
           custTsEl     = $('custTs'),
           custNumberEl = $('custNumber'),
           custFuelEl   = $('custFuel');
-    const scratchArea = $('scratchArea');
+    const scratchArea = $('scratchArea');  // ADDED: Reference to scratchArea
 
     const fmtINR = (n) => {
       try { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0)); }
@@ -179,40 +163,30 @@
       const prize = document.getElementById('prize');
       const pad = 18;
 
-      // Use original inset method for desktop, precise positioning for mobile
-      if (window.innerWidth <= 480) {
-        const scratchAreaRect = scratchArea.getBoundingClientRect();
-        const innerWidth = Math.max(0, scratchAreaRect.width - (pad * 2));
-        const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
-        
-        canvasEl.style.left = `${pad}px`;
-        canvasEl.style.top = `${pad}px`;
-        canvasEl.style.width = `${innerWidth}px`;
-        canvasEl.style.height = `${innerHeight}px`;
-        canvasEl.style.inset = 'unset';
-      } else {
-        // Original desktop behavior
-        canvasEl.style.inset = `${pad}px`;
-        canvasEl.style.left = '';
-        canvasEl.style.top = '';
-      }
+      const scratchArea = prize.parentElement;
+      const saRect = scratchArea.getBoundingClientRect();
+      const innerWidth = Math.max(0, saRect.width - (pad * 2));
+      const innerHeight = Math.max(Math.round(innerWidth / (16/9)), 160);
+
+      canvasEl.style.inset = `${pad}px`;
+      canvasEl.style.width = `${innerWidth}px`;
+      canvasEl.style.height = `${innerHeight}px`;
 
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      const rect = canvasEl.getBoundingClientRect();
-      canvasEl.width = Math.floor(rect.width * dpr);
-      canvasEl.height = Math.floor(rect.height * dpr);
+      canvasEl.width = Math.floor(innerWidth * dpr);
+      canvasEl.height = Math.floor(innerHeight * dpr);
 
       const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
       ctx.fillStyle = '#b8c0cc';
-      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.fillRect(0, 0, innerWidth, innerHeight);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Scratch here', rect.width / 2, rect.height / 2);
+      ctx.fillText('Scratch here', innerWidth / 2, innerHeight / 2);
       ctx.globalCompositeOperation = 'destination-out';
     }
 
@@ -318,7 +292,7 @@
           return;
         }
 
-        // Always show prize amount and label
+        // Show Congrats or Better Luck based on prize amount
         const prizeAmount = Number(row[COL.prizeAmount] || 0);
         amountEl.textContent = fmtINR(prizeAmount);
         
@@ -329,6 +303,8 @@
           labelEl.textContent = 'Better luck next time';
           labelEl.classList.add('pill', 'pill-yellow');
         }
+
+        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Customer details
         const cust = custArr && custArr[0];
@@ -344,18 +320,16 @@
           detailsBox.style.display = 'none';
         }
 
-        // Already used - hide canvas completely
+        // Already used check - ONLY hide canvas, show prize clearly
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
-          scratchArea.classList.add('used');
+          scratchArea.classList.add('used');  // ONLY CHANGE: Add 'used' class to hide canvas
           canvas.style.pointerEvents = 'none';
           return;
         }
-
-        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Fresh card scratching
         new Scratcher(canvas, {
