@@ -35,6 +35,11 @@
       touch-action:none;
       z-index:10;
     }
+    canvas.scratcher.used-overlay{
+      background:rgba(128,128,128,0.92);
+      z-index:15;
+      pointer-events:none;
+    }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
     .err{ color:#f59e0b; }
     code.small{ font-size:12px; color:#9ca3af; word-break:break-all; }
@@ -289,7 +294,7 @@
           return;
         }
 
-        // Show Congrats or Better Luck based on prize amount
+        // Always show prize amount and label (for both fresh and used cards)
         const prizeAmount = Number(row[COL.prizeAmount] || 0);
         amountEl.textContent = fmtINR(prizeAmount);
         
@@ -300,8 +305,6 @@
           labelEl.textContent = 'Better luck next time';
           labelEl.classList.add('pill', 'pill-yellow');
         }
-
-        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Customer details
         const cust = custArr && custArr[0];
@@ -317,15 +320,24 @@
           detailsBox.style.display = 'none';
         }
 
-        // Already used check
+        // Already used check - show gray overlay but keep prize visible
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
         if (isAlreadyUsed) {
           labelEl.textContent = 'Reward revealed';
           labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
+          canvas.classList.add('used-overlay');
           canvas.style.pointerEvents = 'none';
+          // Fully reveal scratch layer so prize shows through gray overlay
+          const ctx = canvas.getContext('2d');
+          ctx.globalCompositeOperation = 'destination-out';
+          const dpr = Math.max(1, window.devicePixelRatio || 1);
+          const rect = canvas.getBoundingClientRect();
+          ctx.fillRect(0, 0, rect.width * dpr, rect.height * dpr);
           return;
         }
+
+        stateEl.textContent = 'Scratch the card to reveal your reward.';
 
         // Fresh card scratching
         new Scratcher(canvas, {
