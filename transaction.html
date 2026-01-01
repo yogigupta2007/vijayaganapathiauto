@@ -101,35 +101,34 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
 
     const TABLE = 'Scratchcards';
-    // assigned_to = link id; customer_id = CID; customer_seq = 1,2,3...
     const COL = {
-      assignedTo: 'assigned_to',
+      assignedTo:  'assigned_to',   // link id
       prizeAmount: 'prize_amount',
-      status: 'status',
-      customerId: 'customer_id',
-      tierAmount: 'tier_amount',
+      status:      'status',
+      customerId:  'customer_id',   // CID
+      tierAmount:  'tier_amount',
       customerSeq: 'customer_seq'
     };
 
     const CUST_TABLE = 'Customers';
     const CT = {
-      CID: 'CID',
-      NAME: 'NAME',
-      AMOUNT: 'AMOUNT',
+      CID:        'CID',
+      NAME:       'NAME',
+      AMOUNT:     'AMOUNT',
       TIME_STAMP: 'TIME_STAMP',
-      NUMBER: 'NUMBER',
-      FUEL_TYPE: 'FUEL_TYPE'
+      NUMBER:     'NUMBER',
+      FUEL_TYPE:  'FUEL_TYPE'
     };
 
     const qs = new URLSearchParams(location.search);
-    // SMS should call: ...transaction.html?id=<assigned_to>
-    const linkId = qs.get('id');
+    // IMPORTANT: must match DLT template param (id or transaction)
+    const linkId = qs.get('id') || qs.get('transaction');
 
     const $ = (id) => document.getElementById(id);
     const amountEl = $('amount'),
-          labelEl = $('label'),
-          stateEl = $('stateMsg'),
-          canvas = $('scratcher'),
+          labelEl  = $('label'),
+          stateEl  = $('stateMsg'),
+          canvas   = $('scratcher'),
           tierBadgeEl = $('tierBadge');
     const detailsBox   = $('detailsBox'),
           custNameEl   = $('custName'),
@@ -141,8 +140,8 @@
           custCardNoEl = $('custCardNo');
 
     const fmtINR = (n) => new Intl.NumberFormat('en-IN',{
-      style:'currency',currency:'INR'
-    }).format(Number(n||0));
+      style:'currency', currency:'INR'
+    }).format(Number(n || 0));
 
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
@@ -164,7 +163,7 @@
       ctx.fillStyle = '#b8c0cc';
       ctx.fillRect(0,0,prizeRect.width,prizeRect.height);
       ctx.fillStyle = '#6b7280';
-      ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
+      ctx.font = '700 20px system-ui,-apple-system,Segoe UI,Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('Scratch here', prizeRect.width/2, prizeRect.height/2);
@@ -176,4 +175,168 @@
         apikey: SUPABASE_ANON_KEY,
         Authorization: 'Bearer '+SUPABASE_ANON_KEY,
         'Content-Type': 'application/json',
-        ...(opts?.headers || {
+        ...(opts?.headers || {})
+      };
+      const res = await fetch(url, { ...opts, headers: h });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
+      try { return JSON.parse(text); } catch { return text; }
+    }
+
+    const selectCardUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}` +
+      `?select=${COL.prizeAmount},${COL.status},${COL.assignedTo},${COL.customerId},${COL.tierAmount},${COL.customerSeq}` +
+      `&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`;
+
+    const markUsedUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`;
+
+    const customerUrl = (cid) =>
+      `${SUPABASE_URL}/rest/v1/${CUST_TABLE}` +
+      `?select=${CT.NAME},${CT.AMOUNT},${CT.TIME_STAMP},${CT.NUMBER},${CT.FUEL_TYPE}` +
+      `&${CT.CID}=eq.${encodeURIComponent(cid)}&limit=1`;
+
+    const customerCardsUrl = (cid) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}` +
+      `?select=${COL.customerId}&${COL.customerId}=eq.${encodeURIComponent(cid)}`;
+
+    const loadCard = (id)       => sbFetch(selectCardUrl(id));
+    const markUsed = (id)       => sbFetch(markUsedUrl(id), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
+    const loadCustomer = (cid)  => sbFetch(customerUrl(cid));
+    const loadAllCards = (cid)  => sbFetch(customerCardsUrl(cid));
+
+    class Scratcher {
+      constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}){
+        this.canvas=canvas;
+        this.ctx=canvas.getContext('2d',{ willReadFrequently:true });
+        this.brush=brush; this.threshold=threshold; this.onReveal=onReveal; this.down=false;
+        this._start=this._start.bind(this); this._move=this._move.bind(this); this._end=this._end.bind(this);
+        canvas.addEventListener('pointerdown',this._start);
+        canvas.addEventListener('pointermove',this._move);
+        canvas.addEventListener('pointerup',this._end);
+        canvas.addEventListener('pointerleave',this._end);
+      }
+      _scratch(e){
+        const rect=this.canvas.getBoundingClientRect();
+        const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left;
+        const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top;
+        const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill();
+      }
+      _check(){
+        const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data;
+        let clr=0,tot=0;
+        for(let y=0;y<h;y+=step){
+          for(let x=0;x<w;x+=step){
+            const a=d[((y*w+x)<<2)+3]; tot++; if(a===0) clr++;
+          }
+        }
+        if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); }
+      }
+      _start(e){ this.down=true; this._scratch(e); }
+      _move(e){ if(!this.down) return; this._scratch(e); this._check(); }
+      _end(){ this.down=false; this._check(); }
+      revealAll(){ this.ctx.globalCompositeOperation='destination-out'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.canvas.style.pointerEvents='none'; }
+    }
+
+    let revealed = false;
+
+    async function init(){
+      await new Promise(r => requestAnimationFrame(()=>r()));
+      sizeCanvasToPrize(canvas);
+      window.addEventListener('resize', () => sizeCanvasToPrize(canvas));
+
+      if (!linkId){
+        stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>';
+        return;
+      }
+
+      try{
+        // 1) load scratchcard
+        const cardRows = await loadCard(linkId);
+        const card = cardRows[0];
+        if (!card){
+          stateEl.innerHTML = '<span class="err">No record found for this link.</span>';
+          return;
+        }
+
+        const prize = Number(card[COL.prizeAmount] || 0);
+        amountEl.textContent = fmtINR(prize);
+
+        if (prize > 0){
+          labelEl.textContent = 'Congratulations';
+          labelEl.classList.add('pill','pill-success');
+        } else {
+          labelEl.textContent = 'Better luck next time';
+          labelEl.classList.add('pill','pill-yellow');
+        }
+
+        const tier = card[COL.tierAmount];
+        const tierLabel = tier ? `₹${tier} tier` : '';
+        tierBadgeEl.textContent = tierLabel;
+
+        const customerId = card[COL.customerId];
+        const seq = card[COL.customerSeq];
+
+        if (customerId){
+          // 2) load customer and total card count
+          const [custRows, allCards] = await Promise.all([
+            loadCustomer(customerId),
+            loadAllCards(customerId)
+          ]);
+          const cust = custRows[0];
+          const totalCards = Array.isArray(allCards) ? allCards.length : 0;
+
+          if (cust){
+            detailsBox.style.display = 'block';
+            custNameEl.textContent   = String(cust[CT.NAME] ?? '');
+            custAmtEl.textContent    = fmtINR(cust[CT.AMOUNT] ?? '');
+            custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
+            custFuelEl.textContent   = String(cust[CT.FUEL_TYPE] ?? '—');
+            custTierEl.textContent   = tierLabel || '—';
+
+            if (seq && totalCards){
+              custCardNoEl.textContent = `${seq} of ${totalCards}`;
+            } else {
+              custCardNoEl.textContent = '—';
+            }
+
+            const ts = cust[CT.TIME_STAMP];
+            custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
+          }
+        }
+
+        const isUsed = String(card[COL.status] ?? '').toLowerCase() === 'used';
+        if (isUsed){
+          labelEl.textContent = 'Reward revealed';
+          labelEl.classList.remove('pill','pill-success','pill-yellow');
+          canvas.classList.add('used');
+          stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
+          return;
+        }
+
+        stateEl.textContent = 'Scratch the card to reveal your reward.';
+        new Scratcher(canvas,{
+          brush:26, threshold:0.5,
+          onReveal: async () => {
+            if (revealed) return;
+            revealed = true;
+            canvas.style.pointerEvents='none';
+            stateEl.textContent='Updating status…';
+            try{
+              await markUsed(card[COL.assignedTo]);
+              stateEl.textContent='Revealed.';
+            }catch(e){
+              console.error('PATCH error:',e);
+              stateEl.textContent='Revealed.';
+            }
+          }
+        });
+      } catch(e){
+        console.error('GET error:', e);
+        stateEl.innerHTML = '<span class="err">Error loading reward.</span>';
+      }
+    }
+    init();
+  </script>
+</body>
+</html>
