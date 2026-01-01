@@ -8,29 +8,32 @@
   <style>
     :root { --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --gold:#f59e0b; }
     *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    body{ margin:0; min-height:100svh; display:grid; place-items:center; background:#0b1020; color:var(--text); padding:16px; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+    body{
+      margin:0; min-height:100svh; display:grid; place-items:center;
+      background:#0b1020; color:var(--text); padding:16px;
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+    }
     .wrap{ width:100%; max-width:420px; }
-    .card{ background:#0a1020; border:1px solid rgba(148,163,184,.15); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden; }
+    .card{
+      background:#0a1020; border:1px solid rgba(148,163,184,.15);
+      border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.45); overflow:hidden;
+    }
     .hdr{ padding:12px 18px 16px 18px; border-bottom:1px solid rgba(148,163,184,.12); }
     .scratch-area{ position:relative; padding:18px 18px 0 18px; }
     .prize{
-      position:relative;
-      border-radius:14px;
+      position:relative; border-radius:14px;
       background:linear-gradient(180deg,rgba(2,6,23,.9),rgba(2,6,23,.85));
       border:1px solid rgba(148,163,184,.18);
-      padding:28px 20px;
-      text-align:center;
-      overflow:hidden;
-      margin-bottom:6px;
+      padding:28px 20px; text-align:center; overflow:hidden; margin-bottom:6px;
     }
     .label{ font-size:14px; color:var(--muted); margin-bottom:8px; }
-    .amount{ font-size:40px; line-height:1.1; font-weight:800; color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25); }
+    .amount{
+      font-size:40px; line-height:1.1; font-weight:800;
+      color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25);
+    }
     canvas.scratcher{
-      position:absolute;
-      border-radius:14px;
-      display:block;
-      touch-action:none;
-      z-index:10;
+      position:absolute; border-radius:14px; display:block;
+      touch-action:none; z-index:10;
     }
     canvas.scratcher.used{ display:none; }
     .state{ padding:0 18px 18px 18px; color:var(--muted); font-size:13px; }
@@ -42,22 +45,15 @@
       border-radius:12px;
       padding:10px 14px;
       background:rgba(2,6,23,.35);
-      font-size:14px;
-      line-height:1.5;
-      color:#d1d5db;
+      font-size:14px; line-height:1.5; color:#d1d5db;
     }
     .details div{ display:flex; justify-content:space-between; gap:10px; }
     .details .k{ color:var(--muted); }
 
     .pill{
-      display:inline-block;
-      padding:2px 8px;
-      border-radius:999px;
-      font-size:11px;
-      font-weight:600;
-      margin-left:6px;
-      text-transform:uppercase;
-      letter-spacing:0.03em;
+      display:inline-block; padding:2px 8px; border-radius:999px;
+      font-size:11px; font-weight:600; margin-left:6px;
+      text-transform:uppercase; letter-spacing:0.03em;
     }
     .pill-success{ background:#14532d; color:#bbf7d0; }
     .pill-danger{ background:#b91c1c; color:#fee2e2; }
@@ -79,6 +75,7 @@
         <div class="prize" id="prize">
           <div class="label" id="label">Scratch to reveal</div>
           <div class="amount" id="amount">₹ — — —</div>
+          <div id="tierBadge" style="margin-top:10px;font-size:12px;color:#e5e7eb;"></div>
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
@@ -99,76 +96,134 @@
     const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
 
+    // Scratchcards: assigned_to = link id, customer_id = CID, tier_amount shows tier
     const TABLE = 'Scratchcards';
-    const COL = { assignedTo:'assigned_to', prizeAmount:'prize_amount', status:'status' };
+    const COL = {
+      assignedTo: 'assigned_to',
+      prizeAmount: 'prize_amount',
+      status: 'status',
+      customerId: 'customer_id',
+      tierAmount: 'tier_amount'
+    };
+
     const CUST_TABLE = 'Customers';
-    const CT = { CID:'CID', NAME:'NAME', AMOUNT:'AMOUNT', TIME_STAMP:'TIME_STAMP', NUMBER:'NUMBER', FUEL_TYPE:'FUEL_TYPE' };
+    const CT = {
+      CID: 'CID',
+      NAME: 'NAME',
+      AMOUNT: 'AMOUNT',
+      TIME_STAMP: 'TIME_STAMP',
+      NUMBER: 'NUMBER',
+      FUEL_TYPE: 'FUEL_TYPE'
+    };
 
     const qs = new URLSearchParams(location.search);
+    // DLT URL should pass ?id=<assigned_to>
     const linkId = qs.get('id');
-    const $ = (id) => document.getElementById(id);
-    const amountEl = $('amount'), labelEl = $('label'), stateEl = $('stateMsg'), canvas = $('scratcher');
-    const detailsBox = $('detailsBox'), custNameEl = $('custName'), custAmtEl = $('custAmt'), 
-          custTsEl = $('custTs'), custNumberEl = $('custNumber'), custFuelEl = $('custFuel');
 
-    const fmtINR = (n) => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(n||0));
+    const $ = (id) => document.getElementById(id);
+    const amountEl = $('amount'),
+          labelEl = $('label'),
+          stateEl = $('stateMsg'),
+          canvas   = $('scratcher'),
+          tierBadgeEl = $('tierBadge');
+    const detailsBox   = $('detailsBox'),
+          custNameEl   = $('custName'),
+          custAmtEl    = $('custAmt'),
+          custTsEl     = $('custTs'),
+          custNumberEl = $('custNumber'),
+          custFuelEl   = $('custFuel');
+
+    const fmtINR = (n) => new Intl.NumberFormat('en-IN',{
+      style:'currency',currency:'INR'
+    }).format(Number(n||0));
 
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
       const scratchAreaRect = prize.parentElement.getBoundingClientRect();
       const prizeRect = prize.getBoundingClientRect();
-      
-      // EXACT pixel positioning to match prize rectangle
+
       canvasEl.style.left = `${prizeRect.left - scratchAreaRect.left}px`;
-      canvasEl.style.top = `${prizeRect.top - scratchAreaRect.top}px`;
-      canvasEl.style.width = `${prizeRect.width}px`;
+      canvasEl.style.top  = `${prizeRect.top  - scratchAreaRect.top }px`;
+      canvasEl.style.width  = `${prizeRect.width }px`;
       canvasEl.style.height = `${prizeRect.height}px`;
-      
+
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvasEl.width = Math.floor(prizeRect.width * dpr);
+      canvasEl.width  = Math.floor(prizeRect.width  * dpr);
       canvasEl.height = Math.floor(prizeRect.height * dpr);
-      
+
       const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      
-      ctx.clearRect(0, 0, prizeRect.width, prizeRect.height);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,prizeRect.width,prizeRect.height);
       ctx.fillStyle = '#b8c0cc';
-      ctx.fillRect(0, 0, prizeRect.width, prizeRect.height);
+      ctx.fillRect(0,0,prizeRect.width,prizeRect.height);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Scratch here', prizeRect.width / 2, prizeRect.height / 2);
+      ctx.fillText('Scratch here', prizeRect.width/2, prizeRect.height/2);
       ctx.globalCompositeOperation = 'destination-out';
     }
 
     async function sbFetch(url, opts){
-      const h = { apikey: SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', ...(opts?.headers||{}) };
-      const res = await fetch(url, { ...opts, headers: h });
+      const h = {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization:'Bearer '+SUPABASE_ANON_KEY,
+        'Content-Type':'application/json',
+        ...(opts?.headers||{})
+      };
+      const res = await fetch(url, { ...opts, headers:h });
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
       try { return JSON.parse(text); } catch { return text; }
     }
 
-    const selectUrl = (idVal) => `${SUPABASE_URL}/rest/v1/${TABLE}?select=${COL.prizeAmount},${COL.status},${COL.assignedTo}&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`;
-    const patchUrl = (idVal) => `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`;
-    const custSelectUrl = (idVal) => `${SUPABASE_URL}/rest/v1/${CUST_TABLE}?select=${CT.NAME},${CT.AMOUNT},${CT.TIME_STAMP},${CT.NUMBER},${CT.FUEL_TYPE}&${CT.CID}=eq.${encodeURIComponent(idVal)}&limit=1`;
+    // load scratchcard row by link id (assigned_to)
+    const selectUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}` +
+      `?select=${COL.prizeAmount},${COL.status},${COL.assignedTo},${COL.customerId},${COL.tierAmount}` +
+      `&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`;
 
-    const loadRow = (idVal) => sbFetch(selectUrl(idVal));
-    const markUsed = (idVal) => sbFetch(patchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
-    const loadCustomer = (idVal) => sbFetch(custSelectUrl(idVal));
+    const patchUrl = (idVal) =>
+      `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`;
+
+    // load customer by CID from customer_id
+    const custSelectUrl = (cidVal) =>
+      `${SUPABASE_URL}/rest/v1/${CUST_TABLE}` +
+      `?select=${CT.NAME},${CT.AMOUNT},${CT.TIME_STAMP},${CT.NUMBER},${CT.FUEL_TYPE}` +
+      `&${CT.CID}=eq.${encodeURIComponent(cidVal)}&limit=1`;
+
+    const loadRow       = (idVal)  => sbFetch(selectUrl(idVal));
+    const markUsed      = (idVal)  => sbFetch(patchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
+    const loadCustomer  = (cidVal) => sbFetch(custSelectUrl(cidVal));
 
     class Scratcher {
-      constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}) {
-        this.canvas = canvas; this.ctx = canvas.getContext('2d', { willReadFrequently:true });
-        this.brush = brush; this.threshold = threshold; this.onReveal = onReveal; this.down=false;
+      constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}){
+        this.canvas=canvas;
+        this.ctx=canvas.getContext('2d',{ willReadFrequently:true });
+        this.brush=brush; this.threshold=threshold; this.onReveal=onReveal; this.down=false;
         this._start=this._start.bind(this); this._move=this._move.bind(this); this._end=this._end.bind(this);
-        canvas.addEventListener('pointerdown', this._start); canvas.addEventListener('pointermove', this._move);
-        canvas.addEventListener('pointerup', this._end); canvas.addEventListener('pointerleave', this._end);
+        canvas.addEventListener('pointerdown',this._start);
+        canvas.addEventListener('pointermove',this._move);
+        canvas.addEventListener('pointerup',this._end);
+        canvas.addEventListener('pointerleave',this._end);
       }
-      _scratch(e){ const rect=this.canvas.getBoundingClientRect(); const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left; const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top; const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill(); }
-      _check(){ const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data; let clr=0,tot=0; for(let y=0;y<h;y+=step){for(let x=0;x<w;x+=step){const a=d[((y*w+x)<<2)+3];tot++; if(a===0) clr++;}} if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); } }
-      _start(e){ this.down=true; this._scratch(e); } _move(e){ if(!this.down) return; this._scratch(e); this._check(); } _end(){ this.down=false; this._check(); }
+      _scratch(e){
+        const rect=this.canvas.getBoundingClientRect();
+        const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left;
+        const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top;
+        const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill();
+      }
+      _check(){
+        const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data;
+        let clr=0,tot=0;
+        for(let y=0;y<h;y+=step){ for(let x=0;x<w;x+=step){
+          const a=d[((y*w+x)<<2)+3]; tot++; if(a===0) clr++;
+        }}
+        if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); }
+      }
+      _start(e){ this.down=true; this._scratch(e); }
+      _move(e){ if(!this.down) return; this._scratch(e); this._check(); }
+      _end(){ this.down=false; this._check(); }
       revealAll(){ this.ctx.globalCompositeOperation='destination-out'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.canvas.style.pointerEvents='none'; }
     }
 
@@ -179,46 +234,88 @@
       sizeCanvasToPrize(canvas);
       window.addEventListener('resize', () => sizeCanvasToPrize(canvas));
 
-      if (!linkId){ stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>'; return; }
+      if (!linkId){
+        stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>';
+        return;
+      }
 
       try{
-        const [scArr, custArr] = await Promise.all([loadRow(linkId), loadCustomer(linkId)]);
+        // 1. load scratchcard by assigned_to (link id)
+        const scArr = await loadRow(linkId);
         row = scArr[0];
-        if (!row){ stateEl.innerHTML = '<span class="err">No record found for this link.</span>'; return; }
+        if (!row){
+          stateEl.innerHTML = '<span class="err">No record found for this link.</span>';
+          return;
+        }
 
         const prizeAmount = Number(row[COL.prizeAmount] || 0);
         amountEl.textContent = fmtINR(prizeAmount);
-        
-        if (prizeAmount > 0) { labelEl.textContent = 'Congratulations'; labelEl.classList.add('pill', 'pill-success'); }
-        else { labelEl.textContent = 'Better luck next time'; labelEl.classList.add('pill', 'pill-yellow'); }
 
-        const cust = custArr && custArr[0];
-        if (cust) {
-          detailsBox.style.display = 'block';
-          custNameEl.textContent = String(cust[CT.NAME] ?? '');
-          custAmtEl.textContent = fmtINR(cust[CT.AMOUNT] ?? row[COL.prizeAmount]);
-          custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
-          custFuelEl.textContent = String(cust[CT.FUEL_TYPE] ?? '—');
-          const ts = cust[CT.TIME_STAMP];
-          custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
-        } else { detailsBox.style.display = 'none'; }
+        if (prizeAmount > 0){
+          labelEl.textContent = 'Congratulations';
+          labelEl.classList.add('pill','pill-success');
+        } else {
+          labelEl.textContent = 'Better luck next time';
+          labelEl.classList.add('pill','pill-yellow');
+        }
+
+        // Tier display
+        const tier = row[COL.tierAmount];
+        if (tier){
+          tierBadgeEl.textContent = `Tier: ₹${tier}`;
+        } else {
+          tierBadgeEl.textContent = '';
+        }
+
+        // 2. load customer using customer_id from scratchcard
+        const customerId = row[COL.customerId];
+        if (customerId){
+          const custArr = await loadCustomer(customerId);
+          const cust = custArr && custArr[0];
+          if (cust){
+            detailsBox.style.display = 'block';
+            custNameEl.textContent   = String(cust[CT.NAME] ?? '');
+            custAmtEl.textContent    = fmtINR(cust[CT.AMOUNT] ?? '');
+            custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
+            custFuelEl.textContent   = String(cust[CT.FUEL_TYPE] ?? '—');
+            const ts = cust[CT.TIME_STAMP];
+            custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
+          } else {
+            detailsBox.style.display = 'none';
+          }
+        } else {
+          detailsBox.style.display = 'none';
+        }
 
         const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
-        if (isAlreadyUsed) {
+        if (isAlreadyUsed){
           labelEl.textContent = 'Reward revealed';
-          labelEl.classList.remove('pill', 'pill-success', 'pill-yellow');
+          labelEl.classList.remove('pill','pill-success','pill-yellow');
           canvas.classList.add('used');
           stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
           return;
         }
 
         stateEl.textContent = 'Scratch the card to reveal your reward.';
-        new Scratcher(canvas, { brush:26, threshold:0.5, onReveal: async () => {
-          if (revealed) return; revealed = true; canvas.style.pointerEvents = 'none';
-          stateEl.textContent = 'Updating status…';
-          try{ await markUsed(row[COL.assignedTo]); stateEl.textContent = 'Revealed.'; }catch(e){ console.error('PATCH error:', e); stateEl.textContent = 'Revealed.'; }
-        }});
-      }catch(e){ console.error('GET error:', e); stateEl.innerHTML = '<span class="err">Error loading reward.</span>'; }
+        new Scratcher(canvas,{
+          brush:26, threshold:0.5,
+          onReveal: async () => {
+            if (revealed) return;
+            revealed=true; canvas.style.pointerEvents='none';
+            stateEl.textContent='Updating status…';
+            try{
+              await markUsed(row[COL.assignedTo]);
+              stateEl.textContent='Revealed.';
+            }catch(e){
+              console.error('PATCH error:',e);
+              stateEl.textContent='Revealed.';
+            }
+          }
+        });
+      } catch(e){
+        console.error('GET error:', e);
+        stateEl.innerHTML = '<span class="err">Error loading reward.</span>';
+      }
     }
     init();
   </script>
