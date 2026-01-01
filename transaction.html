@@ -31,6 +31,8 @@
       font-size:40px; line-height:1.1; font-weight:800;
       color:var(--gold); text-shadow:0 2px 12px rgba(245,158,11,.25);
     }
+    #tierBadge{ margin-top:10px; font-size:12px; color:#e5e7eb; }
+
     canvas.scratcher{
       position:absolute; border-radius:14px; display:block;
       touch-action:none; z-index:10;
@@ -75,7 +77,7 @@
         <div class="prize" id="prize">
           <div class="label" id="label">Scratch to reveal</div>
           <div class="amount" id="amount">₹ — — —</div>
-          <div id="tierBadge" style="margin-top:10px;font-size:12px;color:#e5e7eb;"></div>
+          <div id="tierBadge"></div>
         </div>
         <canvas class="scratcher" id="scratcher"></canvas>
       </div>
@@ -85,6 +87,8 @@
         <div><span class="k">Txn amount</span><span id="custAmt">—</span></div>
         <div><span class="k">Number</span><span id="custNumber">—</span></div>
         <div><span class="k">Fuel type</span><span id="custFuel">—</span></div>
+        <div><span class="k">Tier</span><span id="custTier">—</span></div>
+        <div><span class="k">Card #</span><span id="custCardNo">—</span></div>
         <div><span class="k">Generated on</span><span id="custTs">—</span></div>
       </div>
 
@@ -96,14 +100,15 @@
     const SUPABASE_URL = 'https://qwwwiknpaypvahgdwrlc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
 
-    // Scratchcards: assigned_to = link id, customer_id = CID, tier_amount shows tier
     const TABLE = 'Scratchcards';
+    // assigned_to = link id; customer_id = CID; customer_seq = 1,2,3...
     const COL = {
       assignedTo: 'assigned_to',
       prizeAmount: 'prize_amount',
       status: 'status',
       customerId: 'customer_id',
-      tierAmount: 'tier_amount'
+      tierAmount: 'tier_amount',
+      customerSeq: 'customer_seq'
     };
 
     const CUST_TABLE = 'Customers';
@@ -117,21 +122,23 @@
     };
 
     const qs = new URLSearchParams(location.search);
-    // DLT URL should pass ?id=<assigned_to>
+    // SMS should call: ...transaction.html?id=<assigned_to>
     const linkId = qs.get('id');
 
     const $ = (id) => document.getElementById(id);
     const amountEl = $('amount'),
           labelEl = $('label'),
           stateEl = $('stateMsg'),
-          canvas   = $('scratcher'),
+          canvas = $('scratcher'),
           tierBadgeEl = $('tierBadge');
     const detailsBox   = $('detailsBox'),
           custNameEl   = $('custName'),
           custAmtEl    = $('custAmt'),
           custTsEl     = $('custTs'),
           custNumberEl = $('custNumber'),
-          custFuelEl   = $('custFuel');
+          custFuelEl   = $('custFuel'),
+          custTierEl   = $('custTier'),
+          custCardNoEl = $('custCardNo');
 
     const fmtINR = (n) => new Intl.NumberFormat('en-IN',{
       style:'currency',currency:'INR'
@@ -142,8 +149,8 @@
       const scratchAreaRect = prize.parentElement.getBoundingClientRect();
       const prizeRect = prize.getBoundingClientRect();
 
-      canvasEl.style.left = `${prizeRect.left - scratchAreaRect.left}px`;
-      canvasEl.style.top  = `${prizeRect.top  - scratchAreaRect.top }px`;
+      canvasEl.style.left   = `${prizeRect.left - scratchAreaRect.left}px`;
+      canvasEl.style.top    = `${prizeRect.top  - scratchAreaRect.top }px`;
       canvasEl.style.width  = `${prizeRect.width }px`;
       canvasEl.style.height = `${prizeRect.height}px`;
 
@@ -167,157 +174,6 @@
     async function sbFetch(url, opts){
       const h = {
         apikey: SUPABASE_ANON_KEY,
-        Authorization:'Bearer '+SUPABASE_ANON_KEY,
-        'Content-Type':'application/json',
-        ...(opts?.headers||{})
-      };
-      const res = await fetch(url, { ...opts, headers:h });
-      const text = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
-      try { return JSON.parse(text); } catch { return text; }
-    }
-
-    // load scratchcard row by link id (assigned_to)
-    const selectUrl = (idVal) =>
-      `${SUPABASE_URL}/rest/v1/${TABLE}` +
-      `?select=${COL.prizeAmount},${COL.status},${COL.assignedTo},${COL.customerId},${COL.tierAmount}` +
-      `&${COL.assignedTo}=eq.${encodeURIComponent(idVal)}&limit=1`;
-
-    const patchUrl = (idVal) =>
-      `${SUPABASE_URL}/rest/v1/${TABLE}?${COL.assignedTo}=eq.${encodeURIComponent(idVal)}`;
-
-    // load customer by CID from customer_id
-    const custSelectUrl = (cidVal) =>
-      `${SUPABASE_URL}/rest/v1/${CUST_TABLE}` +
-      `?select=${CT.NAME},${CT.AMOUNT},${CT.TIME_STAMP},${CT.NUMBER},${CT.FUEL_TYPE}` +
-      `&${CT.CID}=eq.${encodeURIComponent(cidVal)}&limit=1`;
-
-    const loadRow       = (idVal)  => sbFetch(selectUrl(idVal));
-    const markUsed      = (idVal)  => sbFetch(patchUrl(idVal), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
-    const loadCustomer  = (cidVal) => sbFetch(custSelectUrl(cidVal));
-
-    class Scratcher {
-      constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}){
-        this.canvas=canvas;
-        this.ctx=canvas.getContext('2d',{ willReadFrequently:true });
-        this.brush=brush; this.threshold=threshold; this.onReveal=onReveal; this.down=false;
-        this._start=this._start.bind(this); this._move=this._move.bind(this); this._end=this._end.bind(this);
-        canvas.addEventListener('pointerdown',this._start);
-        canvas.addEventListener('pointermove',this._move);
-        canvas.addEventListener('pointerup',this._end);
-        canvas.addEventListener('pointerleave',this._end);
-      }
-      _scratch(e){
-        const rect=this.canvas.getBoundingClientRect();
-        const x=(e.clientX ?? (e.touches&&e.touches[0].clientX))-rect.left;
-        const y=(e.clientY ?? (e.touches&&e.touches[0].clientY))-rect.top;
-        const c=this.ctx; c.beginPath(); c.arc(x,y,this.brush,0,Math.PI*2); c.fill();
-      }
-      _check(){
-        const w=this.canvas.width,h=this.canvas.height,step=8,d=this.ctx.getImageData(0,0,w,h).data;
-        let clr=0,tot=0;
-        for(let y=0;y<h;y+=step){ for(let x=0;x<w;x+=step){
-          const a=d[((y*w+x)<<2)+3]; tot++; if(a===0) clr++;
-        }}
-        if(clr/tot>=this.threshold){ this.revealAll(); this.onReveal(); }
-      }
-      _start(e){ this.down=true; this._scratch(e); }
-      _move(e){ if(!this.down) return; this._scratch(e); this._check(); }
-      _end(){ this.down=false; this._check(); }
-      revealAll(){ this.ctx.globalCompositeOperation='destination-out'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.canvas.style.pointerEvents='none'; }
-    }
-
-    let row=null, revealed=false;
-
-    async function init(){
-      await new Promise(r => requestAnimationFrame(()=>r()));
-      sizeCanvasToPrize(canvas);
-      window.addEventListener('resize', () => sizeCanvasToPrize(canvas));
-
-      if (!linkId){
-        stateEl.innerHTML = '<span class="err">Missing ?id in URL.</span>';
-        return;
-      }
-
-      try{
-        // 1. load scratchcard by assigned_to (link id)
-        const scArr = await loadRow(linkId);
-        row = scArr[0];
-        if (!row){
-          stateEl.innerHTML = '<span class="err">No record found for this link.</span>';
-          return;
-        }
-
-        const prizeAmount = Number(row[COL.prizeAmount] || 0);
-        amountEl.textContent = fmtINR(prizeAmount);
-
-        if (prizeAmount > 0){
-          labelEl.textContent = 'Congratulations';
-          labelEl.classList.add('pill','pill-success');
-        } else {
-          labelEl.textContent = 'Better luck next time';
-          labelEl.classList.add('pill','pill-yellow');
-        }
-
-        // Tier display
-        const tier = row[COL.tierAmount];
-        if (tier){
-          tierBadgeEl.textContent = `Tier: ₹${tier}`;
-        } else {
-          tierBadgeEl.textContent = '';
-        }
-
-        // 2. load customer using customer_id from scratchcard
-        const customerId = row[COL.customerId];
-        if (customerId){
-          const custArr = await loadCustomer(customerId);
-          const cust = custArr && custArr[0];
-          if (cust){
-            detailsBox.style.display = 'block';
-            custNameEl.textContent   = String(cust[CT.NAME] ?? '');
-            custAmtEl.textContent    = fmtINR(cust[CT.AMOUNT] ?? '');
-            custNumberEl.textContent = String(cust[CT.NUMBER] ?? '—');
-            custFuelEl.textContent   = String(cust[CT.FUEL_TYPE] ?? '—');
-            const ts = cust[CT.TIME_STAMP];
-            custTsEl.textContent = ts ? new Date(ts).toLocaleString('en-IN') : '';
-          } else {
-            detailsBox.style.display = 'none';
-          }
-        } else {
-          detailsBox.style.display = 'none';
-        }
-
-        const isAlreadyUsed = String(row[COL.status] ?? '').toLowerCase() === 'used';
-        if (isAlreadyUsed){
-          labelEl.textContent = 'Reward revealed';
-          labelEl.classList.remove('pill','pill-success','pill-yellow');
-          canvas.classList.add('used');
-          stateEl.innerHTML = '<span class="pill pill-danger">Already used.</span>';
-          return;
-        }
-
-        stateEl.textContent = 'Scratch the card to reveal your reward.';
-        new Scratcher(canvas,{
-          brush:26, threshold:0.5,
-          onReveal: async () => {
-            if (revealed) return;
-            revealed=true; canvas.style.pointerEvents='none';
-            stateEl.textContent='Updating status…';
-            try{
-              await markUsed(row[COL.assignedTo]);
-              stateEl.textContent='Revealed.';
-            }catch(e){
-              console.error('PATCH error:',e);
-              stateEl.textContent='Revealed.';
-            }
-          }
-        });
-      } catch(e){
-        console.error('GET error:', e);
-        stateEl.innerHTML = '<span class="err">Error loading reward.</span>';
-      }
-    }
-    init();
-  </script>
-</body>
-</html>
+        Authorization: 'Bearer '+SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        ...(opts?.headers || {
