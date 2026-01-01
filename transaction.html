@@ -83,12 +83,14 @@
       </div>
 
       <div class="details" id="detailsBox" style="display:none;">
+        <div style="font-size:15px; font-weight:600;">
+          <span class="k">Card</span><span id="custCardNo">—</span>
+        </div>
         <div><span class="k">Customer</span><span id="custName">—</span></div>
         <div><span class="k">Txn amount</span><span id="custAmt">—</span></div>
         <div><span class="k">Number</span><span id="custNumber">—</span></div>
         <div><span class="k">Fuel type</span><span id="custFuel">—</span></div>
         <div><span class="k">Tier</span><span id="custTier">—</span></div>
-        <div><span class="k">Card #</span><span id="custCardNo">—</span></div>
         <div><span class="k">Generated on</span><span id="custTs">—</span></div>
       </div>
 
@@ -101,11 +103,12 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3d3dpa25wYXlwdmFoZ2R3cmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTQ1OTUsImV4cCI6MjA3NDAzMDU5NX0.xqmg68pzmthq8qvoPjxhVvAz6w_AYzFOF13iZxF1e2Q';
 
     const TABLE = 'Scratchcards';
+    // assigned_to = link id; customer_id = CID; customer_seq = 1,2,3...
     const COL = {
-      assignedTo:  'assigned_to',   // link id
+      assignedTo:  'assigned_to',
       prizeAmount: 'prize_amount',
       status:      'status',
-      customerId:  'customer_id',   // CID
+      customerId:  'customer_id',
       tierAmount:  'tier_amount',
       customerSeq: 'customer_seq'
     };
@@ -121,7 +124,7 @@
     };
 
     const qs = new URLSearchParams(location.search);
-    // IMPORTANT: must match DLT template param (id or transaction)
+    // Support both ?id= and ?transaction=
     const linkId = qs.get('id') || qs.get('transaction');
 
     const $ = (id) => document.getElementById(id);
@@ -143,30 +146,33 @@
       style:'currency', currency:'INR'
     }).format(Number(n || 0));
 
+    // Canvas sizing using offsets (stable version)
     function sizeCanvasToPrize(canvasEl) {
       const prize = document.getElementById('prize');
-      const scratchAreaRect = prize.parentElement.getBoundingClientRect();
-      const prizeRect = prize.getBoundingClientRect();
 
-      canvasEl.style.left   = `${prizeRect.left - scratchAreaRect.left}px`;
-      canvasEl.style.top    = `${prizeRect.top  - scratchAreaRect.top }px`;
-      canvasEl.style.width  = `${prizeRect.width }px`;
-      canvasEl.style.height = `${prizeRect.height}px`;
+      const w = prize.offsetWidth;
+      const h = prize.offsetHeight;
+
+      canvasEl.style.left   = prize.offsetLeft + 'px';
+      canvasEl.style.top    = prize.offsetTop  + 'px';
+      canvasEl.style.width  = w + 'px';
+      canvasEl.style.height = h + 'px';
 
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvasEl.width  = Math.floor(prizeRect.width  * dpr);
-      canvasEl.height = Math.floor(prizeRect.height * dpr);
+      canvasEl.width  = Math.floor(w * dpr);
+      canvasEl.height = Math.floor(h * dpr);
 
       const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.clearRect(0,0,prizeRect.width,prizeRect.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = '#b8c0cc';
-      ctx.fillRect(0,0,prizeRect.width,prizeRect.height);
+      ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = '#6b7280';
       ctx.font = '700 20px system-ui,-apple-system,Segoe UI,Roboto';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Scratch here', prizeRect.width/2, prizeRect.height/2);
+      ctx.fillText('Scratch here', w / 2, h / 2);
       ctx.globalCompositeOperation = 'destination-out';
     }
 
@@ -200,10 +206,10 @@
       `${SUPABASE_URL}/rest/v1/${TABLE}` +
       `?select=${COL.customerId}&${COL.customerId}=eq.${encodeURIComponent(cid)}`;
 
-    const loadCard = (id)       => sbFetch(selectCardUrl(id));
-    const markUsed = (id)       => sbFetch(markUsedUrl(id), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
-    const loadCustomer = (cid)  => sbFetch(customerUrl(cid));
-    const loadAllCards = (cid)  => sbFetch(customerCardsUrl(cid));
+    const loadCard      = (id)  => sbFetch(selectCardUrl(id));
+    const markUsed      = (id)  => sbFetch(markUsedUrl(id), { method:'PATCH', headers:{ Prefer:'return=representation' }, body: JSON.stringify({ [COL.status]:'Used' }) });
+    const loadCustomer  = (cid) => sbFetch(customerUrl(cid));
+    const loadAllCards  = (cid) => sbFetch(customerCardsUrl(cid));
 
     class Scratcher {
       constructor(canvas, { brush=26, threshold=0.5, onReveal=()=>{} }={}){
@@ -251,7 +257,6 @@
       }
 
       try{
-        // 1) load scratchcard
         const cardRows = await loadCard(linkId);
         const card = cardRows[0];
         if (!card){
@@ -278,7 +283,6 @@
         const seq = card[COL.customerSeq];
 
         if (customerId){
-          // 2) load customer and total card count
           const [custRows, allCards] = await Promise.all([
             loadCustomer(customerId),
             loadAllCards(customerId)
@@ -336,6 +340,7 @@
         stateEl.innerHTML = '<span class="err">Error loading reward.</span>';
       }
     }
+
     init();
   </script>
 </body>
